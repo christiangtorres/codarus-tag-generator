@@ -261,6 +261,20 @@
   .variant-sku { font-size: 8.5px; color: #888; letter-spacing: 0.05em; margin: 1px 0; }
   .variant-price { font-size: 13px; font-weight: bold; color: #2c2c2c; margin-top: 2px; }
 
+  /* Loading spinner */
+  #loading-state { display: none; text-align: center; padding: 48px 32px; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid #e8e8e8;
+    border-top-color: #2c2c2c;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-msg { font-size: 14px; color: #444; margin: 0 0 6px; }
+  #loading-sub  { font-size: 11px; color: #aaa; margin: 0; }
+
   @media print {
     body { background: #fff; }
     #setup, .print-bar, .controls { display: none !important; }
@@ -365,6 +379,10 @@
         <label>Price / MSRP</label>
         <select id="as-col-price"></select>
       </div>
+      <div style="margin-top:14px;">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px;">Custom Instructions <span style="font-weight:400;color:#aaa;">(optional)</span></label>
+        <textarea id="as-instructions" placeholder='e.g. "Merge cover-only and with-insert variants onto the same tag. Skip items under $50."' style="width:100%;height:60px;padding:8px 10px;font-size:12px;border:1px solid #ddd;border-radius:4px;font-family:inherit;resize:vertical;color:#333;line-height:1.5;"></textarea>
+      </div>
       <div id="as-preview" style="margin-top:16px;display:none;">
         <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px;">Parse Preview</p>
         <table id="as-preview-table" style="width:100%;font-size:11px;border-collapse:collapse;"></table>
@@ -409,6 +427,13 @@
     <p id="template-hint" style="display:none;"></p>
 
     <button id="generate-btn" style="display:none;">Generate Tags →</button>
+  </div>
+
+  <!-- Loading state (shown while Claude parses) -->
+  <div id="loading-state">
+    <div class="spinner"></div>
+    <p id="loading-msg">Analyzing with Claude…</p>
+    <p id="loading-sub">This usually takes 3–8 seconds</p>
   </div>
 </div>
 
@@ -574,7 +599,7 @@ const AS_SIZE_VARIANTS = [
   "Full/Queen", "Standard", "Queen", "King", "Full", "Euro", "Twin",
   '16" x 24"', "16x24", '22" Square',
 ];
-const AS_SMALL_TYPES  = new Set(["Blanket","Throw","Decorative Pillow","Rug Ottoman"]);
+const AS_SMALL_TYPES  = new Set(["Blanket","Throw","Decorative Pillow","Rug Ottoman","Indoor/Outdoor Pillow"]);
 const AS_BEDDING_TYPES = new Set(["Quilted Coverlet Sham","Matelasse Coverlet","Matelasse Sham",
   "Quilted Coverlet","Quilted Sham","Duvet Cover","Duvet Sham",
   "Coverlet Sham","Sheet Set","Pillowcases","Coverlet","Quilt","Sham"]);
@@ -696,7 +721,7 @@ function updateTemplateHint() {
 document.getElementById('template-select')?.addEventListener('change', updateTemplateHint);
 
 // ── Generate tags ──
-document.getElementById('generate-btn').addEventListener('click', generateTags);
+document.getElementById('generate-btn').addEventListener('click', () => generateTags());
 
 function splitName(name) {
   const words = name.split(' ');
@@ -884,7 +909,7 @@ function getTemplateCss(template) {
   return '';
 }
 
-function generateTags() {
+async function generateTags() {
   const groupCol = document.getElementById('col-group').value;
   const variantCol = document.getElementById('col-variant').value;
   const skuCol = document.getElementById('col-sku').value;
@@ -895,7 +920,7 @@ function generateTags() {
   const template = document.getElementById('template-select').value;
 
   // Annie Selke Format: use dedicated parser
-  if (template === 'as-format') { generateAsFormatTags(); return; }
+  if (template === 'as-format') { await generateAsFormatTags(); return; }
 
   // Group data
   const groups = new Map();
@@ -953,14 +978,56 @@ function generateTags() {
   document.getElementById('tags-view').style.display = 'block';
 }
 
-function generateAsFormatTags() {
+async function generateAsFormatTags() {
   const nameCol  = document.getElementById('as-col-name').value;
   const skuCol   = document.getElementById('as-col-sku').value;
   const priceCol = document.getElementById('as-col-price').value;
 
-  const all = sheetData
-    .map(r => asParseRow(r[nameCol], r[skuCol], r[priceCol]))
-    .filter(r => r.collection);
+  // ── Show loading state ──
+  document.getElementById('step2').style.display = 'none';
+  const loadingState = document.getElementById('loading-state');
+  const loadingMsg   = document.getElementById('loading-msg');
+  const validRows    = sheetData.filter(r => r[nameCol]);
+  loadingMsg.textContent = `Analyzing ${validRows.length} products with Claude…`;
+  loadingState.style.display = 'block';
+
+  let all;
+  let usedFallback = false;
+
+  try {
+    const rows = validRows.map(r => ({
+      name:  String(r[nameCol] || ''),
+      sku:   String(r[skuCol]  || ''),
+      price: parseFloat(String(r[priceCol] || '0').replace(/[$,]/g, '')) || 0
+    }));
+    const instructions = (document.getElementById('as-instructions').value || '').trim();
+    const body = { rows };
+    if (instructions) body.instructions = instructions;
+
+    const resp = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+    const { parsed } = await resp.json();
+    all = parsed.filter(r => r.collection && !r.suppress);
+
+  } catch (err) {
+    // Fallback to local rule-based parser
+    usedFallback = true;
+    console.warn('Claude API unavailable — using local parser:', err.message);
+    loadingMsg.textContent = 'Claude API unavailable — using local parser…';
+    await new Promise(r => setTimeout(r, 900));
+    all = sheetData
+      .map(r => asParseRow(r[nameCol], r[skuCol], r[priceCol]))
+      .filter(r => r.collection);
+  }
+
+  loadingState.style.display = 'none';
 
   // Separate into small-tag and bedding groups
   const smallItems    = all.filter(r => AS_SMALL_TYPES.has(r.type));
@@ -1145,6 +1212,7 @@ ${css}</style></head><body>
 
   const otherItems = all.filter(r => !AS_SMALL_TYPES.has(r.type) && !AS_BEDDING_TYPES.has(r.type));
   let countText = `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated`;
+  if (usedFallback) countText += ' · ⚠ local parser (Claude API unavailable)';
   if (otherItems.length > 0) {
     countText += ` · ⚠ ${otherItems.length} item${otherItems.length !== 1 ? 's' : ''} skipped (unrecognized type: ${[...new Set(otherItems.map(r => r.type))].join(', ')})`;
   }
