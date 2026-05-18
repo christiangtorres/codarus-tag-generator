@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/parse.js": {
-      "runtime": "nodejs18.x"
+      "memory": 256,
+      "maxDuration": 30
     }
   }
 }
