@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Annie Selke Price Tags</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0ede8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px 80px;
+  }
+
+  .logo {
+    max-width: 200px;
+    margin-bottom: 40px;
+    mix-blend-mode: multiply;
+  }
+
+  h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 40px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .card-wrapper {
+    position: relative;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e0ddd8;
+    padding: 28px 24px 20px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: box-shadow 0.15s, transform 0.15s;
+    height: 100%;
+  }
+  .card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+  }
+
+  .card-icon { font-size: 28px; margin-bottom: 4px; }
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #1a1a1a;
+    text-transform: uppercase;
+  }
+  .card-desc { font-size: 12px; color: #888; line-height: 1.5; }
+  .card-meta { font-size: 11px; color: #bbb; margin-top: 2px; }
+  .card-date { font-size: 10px; color: #ccc; margin-top: 4px; }
+
+  /* Generated card accent */
+  .card--generated { border-left: 3px solid #a8d5cf; }
+  .card--new       { border-left: 3px solid #5bb3a8; }
+  .new-badge {
+    display: inline-block;
+    background: #5bb3a8;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    align-self: flex-start;
+  }
+
+  /* Delete button */
+  .card-delete {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: #f0ede8;
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    z-index: 2;
+    font-family: inherit;
+  }
+  .card-wrapper:hover .card-delete { display: flex; }
+  .card-delete:hover { background: #d94040; color: #fff; }
+
+  /* Tool cards (non-deletable) */
+  .tool-card { position: relative; }
+  .tool-card .card { background: #fff; border: 1px solid #e0ddd8; }
+
+  .section-label {
+    width: 100%;
+    max-width: 900px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin: 32px 0 12px;
+  }
+  .section-label:first-of-type { margin-top: 0; }
+
+  /* Trash toggle link */
+  .trash-toggle-row {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 40px;
+    border-top: 1px solid #e0ddd8;
+    padding-top: 20px;
+  }
+  .trash-toggle-btn {
+    background: none;
+    border: 1px solid #d0cdc8;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .trash-toggle-btn:hover { border-color: #999; color: #555; }
+  .trash-badge {
+    display: none;
+    background: #d94040;
+    color: #fff;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    line-height: 1.4;
+  }
+
+  /* Trash section */
+  #trash-section {
+    display: none;
+    width: 100%;
+    max-width: 900px;
+    margin-top: 20px;
+  }
+  .trash-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #c88;
+    margin-bottom: 12px;
+  }
+  .trash-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .trash-card {
+    background: #fff8f8;
+    border: 1px solid #f0d8d8;
+    padding: 20px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .trash-card-icon { font-size: 22px; opacity: 0.5; }
+  .trash-card-title { font-size: 13px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
+  .trash-days { font-size: 11px; color: #c88; margin-top: 2px; }
+  .restore-btn {
+    margin-top: 8px;
+    padding: 5px 12px;
+    border: 1px solid #d0cdc8;
+    background: #fff;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #666;
+    cursor: pointer;
+    font-family: inherit;
+    align-self: flex-start;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .restore-btn:hover { border-color: #888; color: #333; }
+  .trash-empty { font-size: 13px; color: #bbb; font-style: italic; }
+
+  .divider {
+    width: 100%;
+    max-width: 900px;
+    border: none;
+    border-top: 1px solid #e0ddd8;
+    margin: 40px 0 0;
+  }
+
+  .footer {
+    margin-top: 20px;
+    font-size: 11px;
+    color: #bbb;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<img class="logo" src="https://codarus.com/wp-content/uploads/2024/03/CODARUS_Logo_halfinch.jpg" alt="Codarus">
+<h1>Price Tag Generator</h1>
+
+<p class="section-label" id="gen-label">Recently Generated</p>
+<div class="cards" id="tags-grid"></div>
+
+<p class="section-label" id="static-label">Tag Library</p>
+<div class="cards" id="static-grid"></div>
+
+<p class="section-label">Tools</p>
+<div class="cards">
+  <div class="tool-card">
+    <a class="card" href="tag-generator.html">
+      <div class="card-icon">⚙️</div>
+      <div class="card-title">Tag Generator</div>
+      <div class="card-desc">Upload any CSV or Excel file, choose a template, and generate a new set of price tags instantly.</div>
+      <div class="card-meta">Supports .csv · .xls · .xlsx</div>
+    </a>
+  </div>
+
+  <div class="tool-card">
+    <div class="card" style="cursor:default;">
+      <div class="card-icon">📁</div>
+      <div class="card-title">Source Data</div>
+      <div class="card-desc">Original spreadsheets used to generate the tag files above.</div>
+      <div class="card-meta">
+        <a href="data/bedding-source.csv" style="color:#888;text-decoration:underline;">bedding-source.csv</a>
+        &nbsp;·&nbsp;
+        <a href="data/rugs-source.xlsx" style="color:#888;text-decoration:underline;">rugs-source.xlsx</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="trash-toggle-row">
+  <button class="trash-toggle-btn" id="trash-toggle-btn">
+    🗑 Trash
+  </button>
+  <span class="trash-badge" id="trash-badge"></span>
+  <span style="font-size:11px;color:#ccc;">Deleted cards are kept for 30 days</span>
+</div>
+
+<div id="trash-section">
+  <div class="trash-section-label">Trash</div>
+  <div class="trash-cards" id="trash-grid"></div>
+</div>
+
+<hr class="divider">
+<p class="footer">Annie Selke Price Tags · Data Feed</p>
+
+<script>
+// ── Generated card storage ─────────────────────────────────────────────────
+const GENERATED_KEY = 'as-tags-generated-v1';
+
+function getGeneratedCards() {
+  try { return JSON.parse(localStorage.getItem(GENERATED_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function setGeneratedCards(cards) {
+  localStorage.setItem(GENERATED_KEY, JSON.stringify(cards));
+}
+
+function openGenerated(id) {
+  const cards = getGeneratedCards();
+  const card = cards.find(c => c.id === id);
+  if (!card) { alert('Card not found — it may have been cleared.'); return; }
+  const blob = new Blob([card.html], { type: 'text/html' });
+  window.open(URL.createObjectURL(blob), '_blank');
+}
+
+function deleteGenerated(id) {
+  if (!confirm('Move this card to trash? It will be removed within 30 days.')) return;
+  const t = getTrash();
+  t[id] = Date.now();
+  setTrash(t);
+  render();
+}
+
+function restoreGenerated(id) {
+  const t = getTrash();
+  delete t[id];
+  setTrash(t);
+  render();
+}
+
+// ── Card Registry ──────────────────────────────────────────────────────────
+// To add a new card: append an entry to this array and redeploy.
+const REGISTRY = [
+  {
+    id: "bedding-tags",
+    href: "annie-selke-bedding-tags.html",
+    title: "Annie Selke Bedding Tags",
+    description: "Duvet covers, shams, sheet sets, pillowcases — grouped by collection and color.",
+    meta: "202 products · Annie Selke",
+    icon: "🛏",
+    uploadDate: "2026-05-17"
+  },
+  {
+    id: "rug-tags",
+    href: "annie-selke-rug-tags.html",
+    title: "Annie Selke Rug Tags",
+    description: "All rug styles grouped by name, each color on its own page with sizes sorted by price.",
+    meta: "958 products · 135 tags · Annie Selke",
+    icon: "🪢",
+    uploadDate: "2026-05-17"
+  },
+  {
+    id: "small-tags",
+    href: "annie-selke-small-tags.html",
+    title: "Annie Selke Small Tags",
+    description: "Blankets, throws, decorative pillows & rug ottomans — 2″ × 3.5″ hang tags, 10 per page.",
+    meta: "Print job 3 · Landscape · Annie Selke",
+    icon: "🏷️",
+    uploadDate: "2026-05-17"
+  },
+  {
+    id: "bedding-tags-2026-05-18",
+    href: "annie-selke-bedding-tags-2026-05-18.html",
+    title: "Annie Selke Bedding Tags",
+    description: "Duvet covers, shams, sheet sets, pillowcases, quilts, coverlets — grouped by collection.",
+    meta: "24 tags · Annie Selke",
+    icon: "🛏",
+    uploadDate: "2026-05-18"
+  },
+  {
+    id: "small-tags-2026-05-18",
+    href: "annie-selke-small-tags-2026-05-18.html",
+    title: "Annie Selke Small Tags",
+    description: "Blankets and throws — 2″ × 3.5″ hang tags, 10 per page.",
+    meta: "7 tags · Annie Selke",
+    icon: "🏷️",
+    uploadDate: "2026-05-18"
+  },
+  {
+    id: "dec-pillows-throws",
+    href: "annie-selke-dec-pillows-throws.html",
+    title: "Annie Selke Dec Pillows &amp; Throws",
+    description: "Oliver Ombre pillows &amp; throws (3 colorways), Ombre Dot, On The Spot — CV/KIT variants merged, $0 items suppressed.",
+    meta: "9 tags · 1 page · Annie Selke",
+    icon: "🏷️",
+    uploadDate: "2026-05-17"
+  }
+];
+
+// ── Trash helpers ──────────────────────────────────────────────────────────
+const TRASH_KEY = 'as-tags-trash-v1';
+
+function getTrash() {
+  try { return JSON.parse(localStorage.getItem(TRASH_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function setTrash(t) {
+  localStorage.setItem(TRASH_KEY, JSON.stringify(t));
+}
+
+function isInTrash(id) {
+  const t = getTrash();
+  if (!t[id]) return false;
+  const daysOld = (Date.now() - t[id]) / 86400000;
+  if (daysOld > 30) {
+    const fresh = getTrash();
+    delete fresh[id];
+    setTrash(fresh);
+    // Also purge HTML for generated cards
+    const genCards = getGeneratedCards();
+    const pruned = genCards.filter(c => c.id !== id);
+    if (pruned.length !== genCards.length) setGeneratedCards(pruned);
+    return false;
+  }
+  return true;
+}
+
+function daysLeft(id) {
+  const t = getTrash();
+  if (!t[id]) return 0;
+  return Math.max(1, Math.ceil(30 - (Date.now() - t[id]) / 86400000));
+}
+
+function deleteCard(id) {
+  if (!confirm('Move this card to trash? It will be restored if you change your mind within 30 days.')) return;
+  const t = getTrash();
+  t[id] = Date.now();
+  setTrash(t);
+  render();
+}
+
+function restoreCard(id) {
+  const t = getTrash();
+  delete t[id];
+  setTrash(t);
+  render();
+}
+
+function formatDate(str) {
+  const d = new Date(str + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const genCards = getGeneratedCards();
+  const now = Date.now();
+  const isNew = c => c.createdAt && (now - c.createdAt) < 48 * 60 * 60 * 1000;
+
+  const activeGen    = genCards.filter(c => !isInTrash(c.id));
+  const activeStatic = REGISTRY.filter(c => !isInTrash(c.id));
+  const allTrashed   = [
+    ...genCards.filter(c => isInTrash(c.id)).map(c => ({ ...c, isGenerated: true })),
+    ...REGISTRY.filter(c => isInTrash(c.id)).map(c => ({ ...c, isGenerated: false }))
+  ];
+
+  function buildCard(c, generated, badge) {
+    const accentClass = badge ? 'card--new' : generated ? 'card--generated' : '';
+    const cardInner = generated
+      ? `<div class="card ${accentClass}" onclick="openGenerated('${c.id}')" style="cursor:pointer;">`
+      : `<a class="card" href="${c.href}">`;
+    const cardClose = generated ? `</div>` : `</a>`;
+    const deleteHandler = generated ? `deleteGenerated('${c.id}')` : `deleteCard('${c.id}')`;
+    const newPill = badge ? `<span class="new-badge">NEW</span>` : '';
+    return `
+    <div class="card-wrapper">
+      ${cardInner}
+        ${newPill}
+        <div class="card-icon">${c.icon}</div>
+        <div class="card-title">${c.title}</div>
+        <div class="card-desc">${c.description}</div>
+        <div class="card-meta">${c.meta}</div>
+        <div class="card-date">Added ${formatDate(c.uploadDate)}</div>
+      ${cardClose}
+      <button class="card-delete" onclick="event.preventDefault(); event.stopPropagation(); ${deleteHandler}" title="Move to trash">&times;</button>
+    </div>`;
+  }
+
+  // Recently Generated section
+  const genLabel = document.getElementById('gen-label');
+  const genGrid  = document.getElementById('tags-grid');
+  if (activeGen.length === 0) {
+    genLabel.style.display = 'none';
+    genGrid.style.display  = 'none';
+  } else {
+    genLabel.style.display = '';
+    genGrid.style.display  = '';
+    genGrid.innerHTML = activeGen.map(c => buildCard(c, true, isNew(c))).join('');
+  }
+
+  // Tag Library section
+  const staticLabel = document.getElementById('static-label');
+  const staticGrid  = document.getElementById('static-grid');
+  if (activeStatic.length === 0) {
+    staticLabel.style.display = 'none';
+    staticGrid.style.display  = 'none';
+  } else {
+    staticLabel.style.display = '';
+    staticGrid.style.display  = '';
+    staticGrid.innerHTML = activeStatic.map(c => buildCard(c, false, false)).join('');
+  }
+
+  // Trash badge
+  const badge = document.getElementById('trash-badge');
+  if (allTrashed.length > 0) {
+    badge.textContent = allTrashed.length;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  // Trash grid
+  const trashGrid = document.getElementById('trash-grid');
+  if (allTrashed.length === 0) {
+    trashGrid.innerHTML = '<p class="trash-empty">Trash is empty.</p>';
+  } else {
+    trashGrid.innerHTML = allTrashed.map(c => {
+      const restoreHandler = c.isGenerated ? `restoreGenerated('${c.id}')` : `restoreCard('${c.id}')`;
+      return `
+      <div class="trash-card">
+        <div class="trash-card-icon">${c.icon}</div>
+        <div class="trash-card-title">${c.title}</div>
+        <div class="trash-days">${daysLeft(c.id)} day${daysLeft(c.id) !== 1 ? 's' : ''} remaining</div>
+        <button class="restore-btn" onclick="${restoreHandler}">Restore</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── Trash toggle ───────────────────────────────────────────────────────────
+document.getElementById('trash-toggle-btn').addEventListener('click', () => {
+  const section = document.getElementById('trash-section');
+  const open = section.style.display === 'block';
+  section.style.display = open ? 'none' : 'block';
+  document.getElementById('trash-toggle-btn').textContent = open ? '🗑 Trash' : '🗑 Hide Trash';
+});
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "annie-selke-tags",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "3401"],
+      "port": 3401
+    }
+  ]
+}

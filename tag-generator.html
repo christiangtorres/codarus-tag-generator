@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Price Tag Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+
+  /* ── Setup panel ── */
+  #setup {
+    max-width: 680px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 32px;
+  }
+  #setup h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; color: #1a1a1a; }
+  #setup p.sub { font-size: 13px; color: #777; margin-bottom: 24px; }
+
+  /* ── Step 1: Template cards ── */
+  .tpl-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tpl-card {
+    background: #fff;
+    border: 1.5px solid #e0ddd8;
+    border-radius: 6px;
+    padding: 16px 16px 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    font-family: inherit;
+  }
+  .tpl-card:hover { border-color: #2c2c2c; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+  .tpl-card.selected { border-color: #2c2c2c; background: #fafafa; box-shadow: 0 0 0 2px #2c2c2c; }
+  .tpl-card-icon { font-size: 22px; margin-bottom: 6px; }
+  .tpl-card-name { font-size: 13px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.02em; margin-bottom: 4px; }
+  .tpl-card-desc { font-size: 11px; color: #888; line-height: 1.5; }
+  /* AS Format card spans full width */
+  .tpl-card[data-value="as-format"] { grid-column: 1 / -1; border-color: #2c2c2c; background: #fafafa; }
+  .tpl-card[data-value="as-format"].selected { box-shadow: 0 0 0 2px #2c2c2c; }
+
+  /* ── Step 2: header badge ── */
+  #step2-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eee;
+  }
+  #step2-tpl-badge {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #change-tpl-btn {
+    background: none;
+    border: 1px solid #d0cdc8;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #change-tpl-btn:hover { border-color: #888; color: #444; }
+  #as-hint {
+    font-size: 12px;
+    color: #666;
+    background: #f5f5f5;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  /* Drop zone */
+  #dropzone {
+    border: 2px dashed #ccc;
+    border-radius: 6px;
+    padding: 36px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 24px;
+  }
+  #dropzone:hover, #dropzone.drag-over {
+    border-color: #2c2c2c;
+    background: #fafafa;
+  }
+  #dropzone .icon { font-size: 32px; margin-bottom: 8px; }
+  #dropzone p { font-size: 13px; color: #555; }
+  #dropzone strong { color: #2c2c2c; }
+  #file-input { display: none; }
+
+  /* Column mapping */
+  #mapping { display: none; }
+  #mapping h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1a1a1a; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .field-row label { font-size: 13px; font-weight: 500; color: #444; }
+  .field-row select {
+    padding: 7px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a1a;
+    width: 100%;
+  }
+
+  /* Options */
+  #options { display: none; margin: 20px 0 0; }
+  #options h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+  .opt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #444;
+  }
+  .opt-row input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
+  .opt-row input[type=text] {
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 220px;
+  }
+
+  /* Logo upload */
+  #logo-section { display: none; margin-top: 20px; }
+  #logo-section h2 { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #1a1a1a; }
+  #logo-preview { max-height: 48px; display: none; margin-top: 6px; }
+  #logo-label {
+    display: inline-block;
+    padding: 7px 14px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid #ddd;
+  }
+  #logo-label:hover { background: #e5e5e5; }
+  #logo-input { display: none; }
+
+  /* Divider */
+  .sep { border: none; border-top: 1px solid #eee; margin: 24px 0; }
+
+  /* Generate button */
+  #generate-btn {
+    display: none;
+    width: 100%;
+    padding: 13px;
+    background: #2c2c2c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 24px;
+    transition: background 0.2s;
+  }
+  #generate-btn:hover { background: #555; }
+
+  #template-section { display: none; }
+  #file-info { font-size: 12px; color: #888; margin-top: 6px; }
+
+  /* ── Tags view ── */
+  #tags-view { display: none; }
+
+  .print-bar {
+    background: #2c2c2c;
+    color: #fff;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .print-bar button {
+    padding: 8px 20px;
+    border: 1px solid #fff;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 3px;
+  }
+  .print-bar button:hover { background: rgba(255,255,255,0.1); }
+  .print-bar .back-btn { background: rgba(255,255,255,0.15); }
+  .print-bar span { font-size: 13px; color: #aaa; }
+
+  /* Tag cards */
+  .tags-container { padding: 32px; }
+  .tag {
+    background: #fff;
+    border: 1px solid #ccc;
+    width: 4in;
+    min-height: 5.5in;
+    margin: 0 auto 32px;
+    padding: 24px 20px 20px;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Georgia', serif;
+  }
+  .brand-logo { text-align: center; margin-bottom: 14px; }
+  .brand-logo img { max-width: 55%; height: auto; display: block; margin: 0 auto; }
+  .brand-name { text-align: center; font-weight: bold; font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 14px; }
+  .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+  .divider-thick { border: none; border-top: 2px solid #2c2c2c; margin: 6px 0 10px; }
+  .collection {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: center;
+    line-height: 1.3;
+    padding: 4px 0;
+  }
+  .section-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    text-align: center;
+    margin: 8px 0 4px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 3px;
+  }
+  .variants { display: grid; gap: 0; margin-top: 4px; }
+  .variants.two-col { grid-template-columns: 1fr 1fr; }
+  .variants.one-col { grid-template-columns: 1fr; }
+  .variant { padding: 5px 4px; border-bottom: 1px solid #e8e8e8; text-align: center; }
+  .variant:last-child { border-bottom: none; }
+  .variant-size { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; color: #2c2c2c; }
+  .variant-sku { font-size: 8.5px; color: #888; letter-spacing: 0.05em; margin: 1px 0; }
+  .variant-price { font-size: 13px; font-weight: bold; color: #2c2c2c; margin-top: 2px; }
+
+  @media print {
+    body { background: #fff; }
+    #setup, .print-bar, .controls { display: none !important; }
+    #tags-view { display: block !important; }
+    .tags-container { padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── SETUP PANEL ── -->
+<div id="setup">
+  <h1>Price Tag Generator</h1>
+
+  <!-- Step 1: Template picker -->
+  <div id="step1">
+    <p class="sub">Choose a template to get started.</p>
+    <div class="tpl-cards">
+      <button class="tpl-card selected" data-value="as-format">
+        <div class="tpl-card-icon">✨</div>
+        <div class="tpl-card-name">Annie Selke Format</div>
+        <div class="tpl-card-desc">Auto-parses product names — routes bedding, throws, pillows, and ottomans to the right tag format automatically. No column mapping needed.</div>
+      </button>
+      <button class="tpl-card" data-value="bedding">
+        <div class="tpl-card-icon">🛏</div>
+        <div class="tpl-card-name">Bedding</div>
+        <div class="tpl-card-desc">Large 3.66″ × 8.5″ tags grouped by collection. 3-up landscape layout.</div>
+      </button>
+      <button class="tpl-card" data-value="rug">
+        <div class="tpl-card-icon">🪢</div>
+        <div class="tpl-card-name">Rug</div>
+        <div class="tpl-card-desc">Large 3.66″ × 8.5″ tags with 2-column size/price grid. 3-up landscape.</div>
+      </button>
+      <button class="tpl-card" data-value="small">
+        <div class="tpl-card-icon">🏷️</div>
+        <div class="tpl-card-name">Small Tags</div>
+        <div class="tpl-card-desc">2″ × 3.5″ hang tags — 10 per landscape page (5 × 2 grid).</div>
+      </button>
+      <button class="tpl-card" data-value="custom">
+        <div class="tpl-card-icon">⚙️</div>
+        <div class="tpl-card-name">Custom</div>
+        <div class="tpl-card-desc">Generic layout. Manual column mapping for any spreadsheet format.</div>
+      </button>
+    </div>
+    <button id="step1-next-btn" style="margin-top:20px;width:100%;padding:12px;background:#2c2c2c;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;font-family:inherit;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#2c2c2c'">
+      Use This Template →
+    </button>
+  </div>
+
+  <!-- Step 2: Upload + mapping (hidden until template chosen) -->
+  <div id="step2" style="display:none;">
+    <div id="step2-header">
+      <span id="step2-tpl-badge"></span>
+      <button id="change-tpl-btn">← Change template</button>
+    </div>
+
+    <div id="dropzone">
+      <div class="icon">📄</div>
+      <p><strong>Drop a file here</strong> or click to browse</p>
+      <p style="margin-top:4px;font-size:11px;color:#aaa;">Supports .csv, .xls, .xlsx</p>
+    </div>
+    <input type="file" id="file-input" accept=".csv,.xls,.xlsx">
+    <div id="file-info"></div>
+
+    <div id="mapping">
+      <hr class="sep">
+      <h2>Map Columns</h2>
+      <div class="field-row">
+        <label>Group by (collection / family)</label>
+        <select id="col-group"></select>
+      </div>
+      <div id="group-tip" style="font-size:11px; color:#888; margin: -6px 0 10px 164px; line-height:1.4;"></div>
+      <div class="field-row">
+        <label>Variant / Size</label>
+        <select id="col-variant"></select>
+      </div>
+      <div class="field-row">
+        <label>SKU</label>
+        <select id="col-sku"></select>
+      </div>
+      <div class="field-row">
+        <label>Price / MSRP</label>
+        <select id="col-price"></select>
+      </div>
+      <div class="field-row">
+        <label>Sub-section label <span style="font-weight:400;color:#aaa;">(optional)</span></label>
+        <select id="col-type"><option value="">(none)</option></select>
+      </div>
+    </div>
+
+    <!-- Annie Selke Format: simplified 3-field mapping (hidden — auto-parsed) -->
+    <div id="as-mapping" style="display:none;">
+      <div class="field-row">
+        <label>Product Name</label>
+        <select id="as-col-name"></select>
+      </div>
+      <div class="field-row">
+        <label>SKU</label>
+        <select id="as-col-sku"></select>
+      </div>
+      <div class="field-row">
+        <label>Price / MSRP</label>
+        <select id="as-col-price"></select>
+      </div>
+      <div id="as-preview" style="margin-top:16px;display:none;">
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#999;margin-bottom:8px;">Parse Preview</p>
+        <table id="as-preview-table" style="width:100%;font-size:11px;border-collapse:collapse;"></table>
+        <p id="as-type-warning" style="font-size:12px;color:#c87020;margin-top:10px;display:none;"></p>
+      </div>
+    </div>
+
+    <div id="options" style="display:none;">
+      <hr class="sep">
+      <h2>Options</h2>
+      <div class="opt-row">
+        <input type="checkbox" id="opt-color" checked>
+        <label for="opt-color">Each unique group value = its own page (color/style separation)</label>
+      </div>
+      <div class="opt-row">
+        <input type="checkbox" id="opt-sort" checked>
+        <label for="opt-sort">Sort variants cheapest first</label>
+      </div>
+      <div class="opt-row">
+        <input type="checkbox" id="opt-twocol" checked>
+        <label for="opt-twocol">Two-column layout when 2+ variants</label>
+      </div>
+    </div>
+
+    <div id="logo-section" style="display:none;">
+      <hr class="sep">
+      <h2>Logo</h2>
+      <label id="logo-label" for="logo-input">Change logo image…</label>
+      <input type="file" id="logo-input" accept="image/*">
+      <br>
+      <img id="logo-preview" alt="Logo preview">
+    </div>
+
+    <!-- Hidden select kept for JS compatibility -->
+    <select id="template-select" style="display:none;">
+      <option value="as-format">as-format</option>
+      <option value="bedding">bedding</option>
+      <option value="rug">rug</option>
+      <option value="small">small</option>
+      <option value="custom">custom</option>
+    </select>
+    <p id="template-hint" style="display:none;"></p>
+
+    <button id="generate-btn" style="display:none;">Generate Tags →</button>
+  </div>
+</div>
+
+<!-- ── TAGS VIEW ── -->
+<div id="tags-view">
+  <div class="print-bar">
+    <button class="back-btn" onclick="showSetup()">← Back</button>
+    <button onclick="window.print()">🖨 Print All Tags</button>
+    <button onclick="addToSite()" style="background:rgba(255,255,255,0.15);">＋ Add to Site</button>
+    <span id="tag-count"></span>
+    <span style="font-size:11px;color:#888;margin-left:auto;">In print dialog → More settings → uncheck "Headers and footers"</span>
+  </div>
+  <div id="save-instructions" style="display:none; background:#1e3a1e; color:#9ed49e; padding:12px 24px; font-size:13px; line-height:1.7; border-bottom:1px solid #2a4a2a;"></div>
+  <div class="tags-container" id="tags-output"></div>
+</div>
+
+<script>
+// ── Default logo (Annie Selke) ──
+let lastDominantTemplate = 'small';
+let LOGO_SRC = "data:image/png;base64,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";
+
+// ── Parsed sheet data ──
+let sheetData = [];  // array of objects keyed by header name
+let headers = [];
+
+// ── Step management ────────────────────────────────────────────────────────
+const TPL_LABELS = {
+  'as-format': { icon: '✨', name: 'Annie Selke Format' },
+  'bedding':   { icon: '🛏', name: 'Bedding' },
+  'rug':       { icon: '🪢', name: 'Rug' },
+  'small':     { icon: '🏷️', name: 'Small Tags' },
+  'custom':    { icon: '⚙️', name: 'Custom' }
+};
+
+document.querySelectorAll('.tpl-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    document.getElementById('template-select').value = card.dataset.value;
+  });
+});
+
+document.getElementById('step1-next-btn').addEventListener('click', () => {
+  const val = document.getElementById('template-select').value;
+  const lbl = TPL_LABELS[val] || { icon: '', name: val };
+  document.getElementById('step2-tpl-badge').innerHTML =
+    `<span style="font-size:18px;">${lbl.icon}</span> ${lbl.name}`;
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'block';
+  // Reset file state when entering step 2
+  sheetData = []; headers = [];
+  document.getElementById('file-info').textContent = '';
+  document.getElementById('mapping').style.display = 'none';
+  document.getElementById('as-mapping').style.display = 'none';
+  document.getElementById('options').style.display = 'none';
+  document.getElementById('logo-section').style.display = 'none';
+  document.getElementById('generate-btn').style.display = 'none';
+});
+
+document.getElementById('change-tpl-btn').addEventListener('click', () => {
+  document.getElementById('step1').style.display = 'block';
+  document.getElementById('step2').style.display = 'none';
+});
+
+// ── File handling ──
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  document.getElementById('file-info').textContent = `Loaded: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    if (!raw.length) { alert('No data found in file.'); return; }
+    sheetData = raw;
+    headers = Object.keys(raw[0]);
+    populateColumnSelects();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function populateColumnSelects() {
+  const template = document.getElementById('template-select').value;
+  const isAS = template === 'as-format';
+
+  // Standard selects
+  const selects = ['col-group','col-variant','col-sku','col-price','col-type'];
+  selects.forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = id === 'col-type' ? '<option value="">(none)</option>' : '';
+    headers.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h; opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  });
+
+  // AS-specific selects
+  ['as-col-name','as-col-sku','as-col-price'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    headers.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h; opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Smart defaults: fuzzy match header names
+  autoSelect('col-group', ['family','collection','group','name','product']);
+  autoSelect('col-variant', ['size','variant','option']);
+  autoSelect('col-sku', ['sku','item','code','number']);
+  autoSelect('col-price', ['msrp','price','retail','cost','amount']);
+  autoSelect('as-col-name', ['product name','productname','name','product']);
+  autoSelect('as-col-sku', ['sku','product sku','productsku','item','code','number']);
+  autoSelect('as-col-price', ['msrp','price','retail','cost','amount']);
+
+  document.getElementById('mapping').style.display = isAS ? 'none' : 'block';
+  document.getElementById('as-mapping').style.display = isAS ? 'block' : 'none';
+  document.getElementById('options').style.display = isAS ? 'none' : 'block';
+  document.getElementById('logo-section').style.display = 'block';
+  if (!isAS) document.getElementById('generate-btn').style.display = 'block';
+  if (!isAS) updateGroupPreview();
+  if (isAS) {
+    updateAsPreview();
+    // AS format: auto-generate immediately — no button needed
+    generateTags();
+  }
+}
+
+
+function autoSelect(selectId, keywords) {
+  const sel = document.getElementById(selectId);
+  for (const kw of keywords) {
+    const match = headers.find(h => h.toLowerCase().includes(kw));
+    if (match) { sel.value = match; return; }
+  }
+}
+
+// ── Annie Selke Format parsing ────────────────────────────────────────────
+const AS_PRODUCT_TYPES = [
+  "Quilted Coverlet Sham", "Matelasse Coverlet", "Matelasse Sham",
+  "Quilted Coverlet", "Quilted Sham", "Duvet Cover", "Duvet Sham",
+  "Coverlet Sham", "Sheet Set", "Pillowcases", "Coverlet",
+  "Decorative Pillow",
+  "Blanket", "Throw", "Quilt", "Sham",
+];
+const AS_SIZE_VARIANTS = [
+  "Twin/Twin XL", "California King", "Dutch Euro",
+  "Full/Queen", "Standard", "Queen", "King", "Full", "Euro", "Twin",
+  '16" x 24"', "16x24", '22" Square',
+];
+const AS_SMALL_TYPES  = new Set(["Blanket","Throw","Decorative Pillow","Rug Ottoman"]);
+const AS_BEDDING_TYPES = new Set(["Quilted Coverlet Sham","Matelasse Coverlet","Matelasse Sham",
+  "Quilted Coverlet","Quilted Sham","Duvet Cover","Duvet Sham",
+  "Coverlet Sham","Sheet Set","Pillowcases","Coverlet","Quilt","Sham"]);
+
+function asStripEnd(str, list) {
+  for (const s of list) {
+    if (str.endsWith(' ' + s)) return { base: str.slice(0, -(s.length + 1)), matched: s };
+  }
+  return { base: str, matched: null };
+}
+
+function asParseRow(fullName, sku, priceStr) {
+  const price = parseFloat(String(priceStr).replace(/[$,]/g, '')) || 0;
+  const name = String(fullName || '').trim().replace(/​/g, '');
+  // Special case: "Rug Ottoman" mid-name
+  const rugIdx = name.indexOf(' Rug Ottoman ');
+  if (rugIdx !== -1) {
+    return { collection: name.slice(0, rugIdx), type: 'Rug Ottoman',
+             variant: name.slice(rugIdx + 13), sku, price };
+  }
+  const { base: afterSize, matched: variant } = asStripEnd(name, AS_SIZE_VARIANTS);
+  const { base: collection, matched: type }   = asStripEnd(afterSize, AS_PRODUCT_TYPES);
+  return { collection: collection || name, type: type || 'Other', variant: variant || '', sku, price };
+}
+
+function updateAsPreview() {
+  const nameCol  = document.getElementById('as-col-name').value;
+  const skuCol   = document.getElementById('as-col-sku').value;
+  const priceCol = document.getElementById('as-col-price').value;
+  if (!nameCol || !sheetData.length) return;
+
+  const parsed = sheetData.slice(0, 5).map(r =>
+    asParseRow(r[nameCol], r[skuCol], r[priceCol])
+  );
+
+  const all = sheetData.map(r => asParseRow(r[nameCol], r[skuCol], r[priceCol]));
+  const collections = new Set(all.map(r => r.collection));
+  const types = new Set(all.map(r => r.type));
+  const smallCount = all.filter(r => AS_SMALL_TYPES.has(r.type)).length;
+  const beddingCount = all.filter(r => AS_BEDDING_TYPES.has(r.type)).length;
+
+  const warn = document.getElementById('as-type-warning');
+  if (smallCount > 0 && beddingCount > 0) {
+    warn.textContent = `⚠ Mixed sheet: ${smallCount} small-tag item${smallCount!==1?'s':''} (pillows/throws) and ${beddingCount} bedding item${beddingCount!==1?'s':''}. Two separate files will be generated.`;
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+
+  const table = document.getElementById('as-preview-table');
+  table.innerHTML = `
+    <tr style="background:#f5f5f5;">
+      <th style="padding:4px 8px;text-align:left;color:#666;">Product Name (first 5)</th>
+      <th style="padding:4px 8px;text-align:left;color:#666;">Collection</th>
+      <th style="padding:4px 8px;text-align:left;color:#666;">Type</th>
+      <th style="padding:4px 8px;text-align:left;color:#666;">Variant</th>
+    </tr>
+    ${parsed.map(r => `
+      <tr style="border-top:1px solid #eee;">
+        <td style="padding:4px 8px;color:#999;font-size:10px;">${sheetData[parsed.indexOf(r)][nameCol]?.slice(0,35) || ''}</td>
+        <td style="padding:4px 8px;font-weight:600;">${r.collection}</td>
+        <td style="padding:4px 8px;color:#666;">${r.type}</td>
+        <td style="padding:4px 8px;color:#888;">${r.variant || '—'}</td>
+      </tr>`).join('')}
+  `;
+  document.getElementById('as-preview').style.display = 'block';
+
+  const summary = document.getElementById('as-preview').querySelector('p:first-child') || document.createElement('p');
+  // Update hint below table
+  const hint = `${collections.size} collection${collections.size!==1?'s':''} · ${all.length} items · types: ${[...types].join(', ')}`;
+  table.setAttribute('data-summary', hint);
+}
+
+document.addEventListener('change', e => {
+  if (['as-col-name','as-col-sku','as-col-price'].includes(e.target.id)) updateAsPreview();
+});
+
+function updateGroupPreview() {
+  const groupCol = document.getElementById('col-group').value;
+  if (!groupCol || !sheetData.length) return;
+  const unique = new Set(sheetData.map(r => String(r[groupCol] || '').trim()).filter(Boolean));
+  const tip = document.getElementById('group-tip');
+  tip.textContent = `"${groupCol}" has ${unique.size} unique value${unique.size !== 1 ? 's' : ''} → ${unique.size} tag${unique.size !== 1 ? 's' : ''} will be generated.`;
+  tip.style.color = unique.size === sheetData.length ? '#c87020' : '#447744';
+  if (unique.size === sheetData.length && sheetData.length > 1) {
+    tip.textContent += ' ⚠ Each row is its own tag — is this correct? You may need a dedicated "Collection" column.';
+  }
+}
+document.addEventListener('change', e => {
+  if (e.target.id === 'col-group') updateGroupPreview();
+});
+
+// ── Logo upload ──
+document.getElementById('logo-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    LOGO_SRC = ev.target.result;
+    const prev = document.getElementById('logo-preview');
+    prev.src = LOGO_SRC;
+    prev.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+
+// ── Template hint ──
+function updateTemplateHint() {
+  const hints = {
+    'as-format': 'Reads Product Name, SKU, and Price. Automatically extracts collection, type, and variant — routes bedding items to large tags and pillows/throws/ottomans to small tags.',
+    bedding: 'Groups by collection name. Sub-groups by product type if mapped. Large 3-up landscape tags.',
+    rug: 'Groups by collection name. 2-column pricing grid with dividers. Large 3-up landscape tags.',
+    small: 'Groups by collection name. Compact 2″ × 3.5″ hang tags, 10 per landscape page.',
+    custom: 'Generic layout. No Annie Selke styling applied.'
+  };
+  const val = document.getElementById('template-select').value;
+  document.getElementById('template-hint').textContent = hints[val] || '';
+}
+document.getElementById('template-select')?.addEventListener('change', updateTemplateHint);
+
+// ── Generate tags ──
+document.getElementById('generate-btn').addEventListener('click', generateTags);
+
+function splitName(name) {
+  const words = name.split(' ');
+  if (words.length <= 2) return name;
+  const mid = Math.ceil(words.length / 2);
+  return words.slice(0, mid).join(' ') + '<br>' + words.slice(mid).join(' ');
+}
+
+function formatPrice(num) {
+  return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderBeddingTag(groupName, items, typeCol, twoCol, logoHtml) {
+  const typeGroups = new Map();
+  if (typeCol) {
+    for (const item of items) {
+      if (!typeGroups.has(item.type)) typeGroups.set(item.type, []);
+      typeGroups.get(item.type).push(item);
+    }
+  } else {
+    typeGroups.set('', items);
+  }
+  let sectionsHtml = '';
+  for (const [typeName, typeItems] of typeGroups) {
+    const useSingleCol = !twoCol || typeItems.length === 1;
+    const gridClass = useSingleCol ? 'single-col' : '';
+    sectionsHtml += `<div class="type-section">
+      ${typeName ? `<div class="type-name" contenteditable="true">${typeName}</div>` : ''}
+      <div class="variants ${gridClass}">
+        ${typeItems.map(item => `
+          <div class="variant">
+            <div class="variant-size" contenteditable="true">${item.variant}</div>
+            <div class="variant-sku" contenteditable="true">${item.sku}</div>
+            <div class="variant-price" contenteditable="true">${formatPrice(item.price)}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  return `
+    ${logoHtml}
+    <div class="collection-name" contenteditable="true">${splitName(groupName)}</div>
+    ${sectionsHtml}`;
+}
+
+function renderRugTag(groupName, items, logoHtml) {
+  const gridClass = items.length > 1 ? 'two-col' : '';
+  const variantsHtml = items.map((item, i) => `
+    <div class="variant">
+      <div class="variant-size" contenteditable="true">${item.variant}</div>
+      <div class="variant-sku" contenteditable="true">${item.sku}</div>
+      <div class="variant-price" contenteditable="true">${formatPrice(item.price)}</div>
+    </div>`).join('');
+  return `
+    ${logoHtml}
+    <div class="collection" contenteditable="true">${splitName(groupName)}</div>
+    <hr class="divider">
+    <div class="variants ${gridClass}">${variantsHtml}</div>`;
+}
+
+function renderSmallTag(groupName, items, typeCol, logoHtml) {
+  const typeGroups = new Map();
+  if (typeCol) {
+    for (const item of items) {
+      if (!typeGroups.has(item.type)) typeGroups.set(item.type, []);
+      typeGroups.get(item.type).push(item);
+    }
+  } else {
+    typeGroups.set('', items);
+  }
+  let sectionsHtml = '';
+  for (const [typeName, typeItems] of typeGroups) {
+    sectionsHtml += `
+      ${typeName ? `<div class="type-name" contenteditable="true">${typeName}</div>` : ''}
+      <div class="variants">
+        ${typeItems.map(item => {
+          const sizeHtml = item.variant ? `<div class="variant-size" contenteditable="true">${item.variant}</div>` : '';
+          const priceStr = typeof item.price === 'string' ? item.price : formatPrice(item.price);
+          return `<div class="variant">
+            ${sizeHtml}
+            <div class="variant-sku" contenteditable="true">${item.sku}</div>
+            <div class="variant-price" contenteditable="true">${priceStr}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+  return `
+    ${logoHtml}
+    <div class="collection-name" contenteditable="true">${splitName(groupName)}</div>
+    <hr class="divider">
+    ${sectionsHtml}`;
+}
+
+function renderCustomTag(groupName, items, typeCol, twoCol, logoHtml) {
+  const typeGroups = new Map();
+  if (typeCol) {
+    for (const item of items) {
+      if (!typeGroups.has(item.type)) typeGroups.set(item.type, []);
+      typeGroups.get(item.type).push(item);
+    }
+  } else {
+    typeGroups.set('', items);
+  }
+  let sectionsHtml = '';
+  for (const [typeName, typeItems] of typeGroups) {
+    const useSingleCol = !twoCol || typeItems.length === 1;
+    const gridClass = useSingleCol ? 'one-col' : 'two-col';
+    if (typeName) sectionsHtml += `<div class="section-label" contenteditable="true">${typeName}</div>`;
+    sectionsHtml += `<div class="variants ${gridClass}">`;
+    sectionsHtml += typeItems.map(item => `
+      <div class="variant">
+        <div class="variant-size" contenteditable="true">${item.variant}</div>
+        <div class="variant-sku" contenteditable="true">${item.sku}</div>
+        <div class="variant-price" contenteditable="true">$${item.price.toFixed(2)}</div>
+      </div>`).join('');
+    sectionsHtml += '</div>';
+  }
+  return `
+    ${logoHtml}
+    <hr class="divider">
+    <div class="collection" contenteditable="true">${groupName}</div>
+    <hr class="divider-thick">
+    ${sectionsHtml}`;
+}
+
+function getTemplateCss(template) {
+  if (template === 'bedding') return `
+    .tags-container { display: flex; flex-wrap: wrap; gap: 16px; padding: 20px; background: #f0f0f0; }
+    .tag { background: #fff; border: 1px solid #ccc; width: 3.66in; min-height: 8.5in; padding: 0.5in 0.25in 0.25in; font-family: Arial, sans-serif; display: flex; flex-direction: column; text-align: center; }
+    .brand-logo img { max-width: 180px; max-height: 60px; object-fit: contain; display: block; margin: 0 auto; }
+    .brand-name { font-size: 18px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; text-align: center; }
+    .collection-name { font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin: 0.25in 0 4px; line-height: 1.3; }
+    .type-section { margin-top: 10px; border-top: 1px solid #e8e8e8; padding-top: 8px; }
+    .type-name { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 6px; }
+    .variants { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; }
+    .variants.single-col { grid-template-columns: 1fr; }
+    .variant { text-align: center; padding: 2px 0; }
+    .variant-size { font-size: 12px; font-weight: bold; text-transform: uppercase; font-family: Arial, sans-serif; line-height: 1.3; }
+    .variant-sku { font-size: 11px; color: #444; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 1px; }
+    .variant-price { font-size: 13px; font-weight: bold; text-transform: uppercase; font-family: Arial, sans-serif; margin-top: 3px; }
+    [contenteditable]:focus { outline: 1px solid #4a90d9; background: #f0f7ff; }
+    [contenteditable]:hover { background: #fafafa; cursor: text; }
+    @media print { @page { size: 11in 8.5in landscape; margin: 0; } body { background: #fff; padding: 0; } .print-bar, .controls { display: none !important; } body.no-cut-lines .tag { border-color: transparent; } #tags-view { display: block !important; } .tags-container { display: flex; flex-wrap: wrap; gap: 0; padding: 0; } .tag { border: 1px solid #ccc; width: 3.66in; min-height: 8.5in; break-inside: avoid; page-break-inside: avoid; page-break-after: auto; break-after: auto; margin: 0; } .tag:nth-child(3n) { page-break-after: always; break-after: page; } [contenteditable]:focus, [contenteditable]:hover { outline: none; background: none; } }
+  `;
+  if (template === 'rug') return `
+    .tags-container { display: flex; flex-wrap: wrap; gap: 16px; padding: 20px; background: #f0f0f0; }
+    .tag { background: #fff; border: 1px solid #ccc; width: 3.66in; min-height: 8.5in; padding: 0.5in 0.25in 0.25in; font-family: Arial, sans-serif; display: flex; flex-direction: column; text-align: center; }
+    .brand-logo img { max-width: 180px; max-height: 60px; object-fit: contain; display: block; margin: 0 auto; }
+    .brand-name { font-size: 18px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; text-align: center; }
+    .collection { font-size: 15px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin: 0.25in 0 6px; line-height: 1.3; font-family: Arial, sans-serif; text-align: center; }
+    .divider { border: none; border-top: 1px solid #e8e8e8; margin: 6px 0 10px; }
+    .variants { display: grid; grid-template-columns: 1fr 1fr; }
+    .variants.two-col { grid-template-columns: 1fr 1fr; }
+    .variant { padding: 12px 4px; text-align: center; border-bottom: 1px solid #e8e8e8; }
+    .variant:last-child { border-bottom: none; }
+    .variants.two-col .variant:nth-child(odd) { border-right: 1px solid #e8e8e8; }
+    .variants.two-col .variant:last-child:nth-child(odd) { grid-column: 1; }
+    .variants.two-col .variant:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+    .variant-size { font-size: 13px; font-weight: bold; text-transform: uppercase; font-family: Arial, sans-serif; }
+    .variant-sku { font-size: 11px; color: #888; text-transform: uppercase; font-family: Arial, sans-serif; }
+    .variant-price { font-size: 13px; font-weight: bold; text-transform: uppercase; font-family: Arial, sans-serif; }
+    [contenteditable]:focus { outline: 1px solid #4a90d9; background: #f0f7ff; }
+    [contenteditable]:hover { background: #fafafa; cursor: text; }
+    @media print { @page { size: 11in 8.5in landscape; margin: 0; } body { background: #fff; padding: 0; } .print-bar, .controls { display: none !important; } body.no-cut-lines .tag { border-color: transparent; } #tags-view { display: block !important; } .tags-container { display: flex; flex-wrap: wrap; gap: 0; padding: 0; } .tag { border: 1px solid #ccc; width: 3.66in; min-height: 8.5in; break-inside: avoid; page-break-inside: avoid; page-break-after: auto; break-after: auto; margin: 0; } .tag:nth-child(3n) { page-break-after: always; break-after: page; } [contenteditable]:focus, [contenteditable]:hover { outline: none; background: none; } }
+  `;
+  if (template === 'small') return `
+    .tags-container { display: flex; flex-wrap: wrap; gap: 12px; padding: 20px; background: #f0f0f0; align-items: flex-start; }
+    .tag-page { display: flex; flex-wrap: wrap; gap: 12px; }
+    .tag { background: #fff; border: 1px solid #ccc; width: 2in; min-height: 3.5in; padding: 0.5in 8px 8px; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; text-align: center; page-break-after: auto; break-after: auto; margin: 0; }
+    .brand-logo img { max-width: 1.375in; max-height: 0.5in; object-fit: contain; display: block; margin: 0 auto; }
+    .brand-name { font-size: 10px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+    .collection-name { font-size: 11.5px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin: 0.1in 0 4px; line-height: 1.35; font-family: Arial, sans-serif; }
+    .divider { width: 100%; border: none; border-top: 1px solid #e8e8e8; margin: 4px 0 6px; }
+    .type-name { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 5px; font-family: Arial, sans-serif; }
+    .variants { width: 100%; }
+    .variant { width: 100%; text-align: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+    .variant:last-child { border-bottom: none; }
+    .variant-size { font-size: 9.5px; font-weight: bold; text-transform: uppercase; line-height: 1.35; font-family: Arial, sans-serif; word-wrap: break-word; }
+    .variant-sku { font-size: 8.5px; color: #888; text-transform: uppercase; margin: 1px 0; font-family: Arial, sans-serif; }
+    .variant-price { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-top: 1px; font-family: Arial, sans-serif; }
+    [contenteditable]:focus { outline: 1px solid #4a90d9; background: #f0f7ff; }
+    [contenteditable]:hover { background: #fafafa; cursor: text; }
+    @media print { @page { size: 11in 8.5in landscape; margin: 0.75in 0.5in; } body { background: #fff; padding: 0; margin: 0; } .print-bar, .controls { display: none !important; } body.no-cut-lines .tag { border-color: transparent; } #tags-view { display: block !important; } .tags-container { display: block; padding: 0; background: none; font-size: 0; } .tag-page { display: block; font-size: 0; page-break-after: always; break-after: page; } .tag-page:last-child { page-break-after: auto; break-after: auto; } .tag { display: inline-block; vertical-align: top; width: 2in; height: 3.5in; overflow: hidden; border: 1px solid #ccc; margin: 0; padding: 0.5in 8px 8px; box-sizing: border-box; font-size: 10px; page-break-after: auto; break-after: auto; } [contenteditable]:focus, [contenteditable]:hover { outline: none; background: none; } }
+  `;
+  // custom - keep original styles as-is
+  return '';
+}
+
+function generateTags() {
+  const groupCol = document.getElementById('col-group').value;
+  const variantCol = document.getElementById('col-variant').value;
+  const skuCol = document.getElementById('col-sku').value;
+  const priceCol = document.getElementById('col-price').value;
+  const typeCol = document.getElementById('col-type').value;
+  const sortPrice = document.getElementById('opt-sort').checked;
+  const twoCol = document.getElementById('opt-twocol').checked;
+  const template = document.getElementById('template-select').value;
+
+  // Annie Selke Format: use dedicated parser
+  if (template === 'as-format') { generateAsFormatTags(); return; }
+
+  // Group data
+  const groups = new Map();
+  for (const row of sheetData) {
+    const groupKey = String(row[groupCol] || '').trim();
+    if (!groupKey) continue;
+    if (!groups.has(groupKey)) groups.set(groupKey, []);
+    groups.get(groupKey).push({
+      sku: String(row[skuCol] || ''),
+      variant: String(row[variantCol] || ''),
+      price: parseFloat(String(row[priceCol]).replace(/[$,]/g, '')) || 0,
+      type: typeCol ? String(row[typeCol] || '') : ''
+    });
+  }
+
+  if (sortPrice) {
+    for (const items of groups.values()) items.sort((a, b) => a.price - b.price);
+  }
+
+  // Inject template CSS
+  let existingStyle = document.getElementById('template-override-css');
+  if (existingStyle) existingStyle.remove();
+  const style = document.createElement('style');
+  style.id = 'template-override-css';
+  style.textContent = getTemplateCss(template);
+  document.head.appendChild(style);
+
+  const output = document.getElementById('tags-output');
+  output.innerHTML = '';
+  let tagCount = 0;
+
+  const logoHtml = LOGO_SRC
+    ? `<div class="brand-logo"><img src="${LOGO_SRC}" alt="Brand Logo"></div>`
+    : `<div class="brand-name">ANNIE SELKE</div>`;
+
+  for (const [groupName, items] of groups) {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+
+    if (template === 'bedding') {
+      tag.innerHTML = renderBeddingTag(groupName, items, typeCol, twoCol, logoHtml);
+    } else if (template === 'rug') {
+      tag.innerHTML = renderRugTag(groupName, items, logoHtml);
+    } else if (template === 'small') {
+      tag.innerHTML = renderSmallTag(groupName, items, typeCol, logoHtml);
+    } else {
+      tag.innerHTML = renderCustomTag(groupName, items, typeCol, twoCol, logoHtml);
+    }
+    output.appendChild(tag);
+    tagCount++;
+  }
+
+  document.getElementById('tag-count').textContent = `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated`;
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('tags-view').style.display = 'block';
+}
+
+function generateAsFormatTags() {
+  const nameCol  = document.getElementById('as-col-name').value;
+  const skuCol   = document.getElementById('as-col-sku').value;
+  const priceCol = document.getElementById('as-col-price').value;
+
+  const all = sheetData
+    .map(r => asParseRow(r[nameCol], r[skuCol], r[priceCol]))
+    .filter(r => r.collection);
+
+  // Separate into small-tag and bedding groups
+  const smallItems    = all.filter(r => AS_SMALL_TYPES.has(r.type));
+  const beddingItems  = all.filter(r => AS_BEDDING_TYPES.has(r.type));
+  const hasSmall      = smallItems.length > 0;
+  const hasBedding    = beddingItems.length > 0;
+
+  const output = document.getElementById('tags-output');
+  output.innerHTML = '';
+  let tagCount = 0;
+
+  const logoHtml = LOGO_SRC
+    ? `<div class="brand-logo"><img src="${LOGO_SRC}" alt="Annie Selke"></div>`
+    : `<div class="brand-name">ANNIE SELKE</div>`;
+
+  // Inject small-tag CSS if small items exist; otherwise bedding CSS
+  const dominantTemplate = hasSmall ? 'small' : 'bedding';
+  lastDominantTemplate = dominantTemplate;
+  let existingStyle = document.getElementById('template-override-css');
+  if (existingStyle) existingStyle.remove();
+  const style = document.createElement('style');
+  style.id = 'template-override-css';
+  style.textContent = getTemplateCss(dominantTemplate);
+  document.head.appendChild(style);
+
+  // ── Helper: build tag DOM nodes into a container for a given item set + template
+  function buildSmallTagNodes(items, container) {
+    const expanded = [];
+    items.forEach(item => {
+      if (item.type === 'Rug Ottoman' && item.variant) {
+        const finish = item.variant.split(' ')[0];
+        const shape  = item.variant.split(' ').slice(2).join(' ');
+        expanded.push({ ...item, type: `Rug Ottoman · ${finish} Legs`, variant: shape || item.variant });
+      } else {
+        expanded.push(item);
+      }
+    });
+    const cols = new Map();
+    expanded.forEach(({ collection, type, sku, variant, price }) => {
+      if (!cols.has(collection)) cols.set(collection, new Map());
+      const types = cols.get(collection);
+      if (!types.has(type)) types.set(type, []);
+      types.get(type).push({ sku, variant, price, type });
+    });
+    for (const types of cols.values())
+      for (const arr of types.values())
+        arr.sort((a, b) => a.price - b.price);
+    const tagEls = [];
+    cols.forEach((types, collectionName) => {
+      types.forEach((arr, typeName) => {
+        const fmtItems = arr.map(i => ({ ...i, price: formatPrice(i.price) }));
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.innerHTML = renderSmallTag(collectionName, fmtItems, true, logoHtml);
+        tagEls.push(tag);
+      });
+    });
+    // Group into page containers of 10 (5 cols × 2 rows)
+    for (let i = 0; i < tagEls.length; i += 10) {
+      const page = document.createElement('div');
+      page.className = 'tag-page';
+      tagEls.slice(i, i + 10).forEach(t => page.appendChild(t));
+      container.appendChild(page);
+    }
+    return tagEls.length;
+  }
+
+  function buildBeddingTagNodes(items, container) {
+    const cols = new Map();
+    items.forEach(({ collection, type, sku, variant, price }) => {
+      if (!cols.has(collection)) cols.set(collection, new Map());
+      const types = cols.get(collection);
+      if (!types.has(type)) types.set(type, []);
+      types.get(type).push({ sku, variant, price, type });
+    });
+    for (const types of cols.values())
+      for (const arr of types.values())
+        arr.sort((a, b) => a.price - b.price);
+    let count = 0;
+    cols.forEach((types, collectionName) => {
+      const allItems = [];
+      types.forEach((arr, typeName) => arr.forEach(i => allItems.push({ ...i })));
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.innerHTML = renderBeddingTag(collectionName, allItems, true, true, logoHtml);
+      container.appendChild(tag);
+      count++;
+    });
+    return count;
+  }
+
+  // ── Mixed sheet: auto-save two cards to site
+  if (hasSmall && hasBedding) {
+    const date = new Date().toISOString().slice(0, 10);
+    const smallContainer   = document.createElement('div');
+    const beddingContainer = document.createElement('div');
+    const sc = buildSmallTagNodes(smallItems, smallContainer);
+    const bc = buildBeddingTagNodes(beddingItems, beddingContainer);
+
+    function makeStandaloneHtml(container, template) {
+      const css = getTemplateCss(template);
+      return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Annie Selke Tags</title>
+<style>* { box-sizing: border-box; } body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; margin: 0; }
+.controls { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; }
+.controls button { padding: 8px 16px; font-size: 13px; cursor: pointer; border: 1px solid #999; background: #fff; border-radius: 4px; font-family: Arial, sans-serif; }
+.hint { font-size: 12px; color: #666; }
+[contenteditable]:focus { outline: 1px solid #4a90d9; background: #f0f7ff; }
+[contenteditable]:hover { background: #fafafa; cursor: text; }
+${css}</style></head><body>
+<div class="controls"><button onclick="window.print()">Print / Save as PDF</button>
+<button id="cutLineBtn" onclick="toggleCutLines()">Cut Lines: ON</button></div>
+<div class="tags-container" id="tags">${container.innerHTML}</div>
+<script>function toggleCutLines(){const on=document.body.classList.toggle('no-cut-lines');document.getElementById('cutLineBtn').textContent=on?'Cut Lines: OFF':'Cut Lines: ON';}<\/script>
+</body></html>`;
+    }
+
+    const smallHtml   = makeStandaloneHtml(smallContainer, 'small');
+    const beddingHtml = makeStandaloneHtml(beddingContainer, 'bedding');
+
+    addGeneratedCard({
+      title: 'Annie Selke Small Tags',
+      description: 'Blankets, throws, decorative pillows & rug ottomans — 2″ × 3.5″ hang tags.',
+      meta: `${sc} tag${sc!==1?'s':''} · Annie Selke`,
+      icon: '🏷️',
+      html: smallHtml,
+      uploadDate: date
+    });
+    addGeneratedCard({
+      title: 'Annie Selke Bedding Tags',
+      description: 'Duvet covers, shams, sheet sets, pillowcases, quilts, coverlets — grouped by collection.',
+      meta: `${bc} tag${bc!==1?'s':''} · Annie Selke`,
+      icon: '🛏',
+      html: beddingHtml,
+      uploadDate: date
+    });
+
+    // Open both blobs immediately
+    const smallBlob   = new Blob([smallHtml],   { type: 'text/html' });
+    const beddingBlob = new Blob([beddingHtml], { type: 'text/html' });
+    const smallUrl   = URL.createObjectURL(smallBlob);
+    const beddingUrl = URL.createObjectURL(beddingBlob);
+    window.open(smallUrl,   '_blank');
+    window.open(beddingUrl, '_blank');
+
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('save-instructions').style.display = 'none';
+    document.getElementById('tags-view').style.display = 'block';
+    document.getElementById('tag-count').textContent = `${sc + bc} tags · 2 files generated`;
+    document.getElementById('tags-output').innerHTML = `
+      <div style="padding:40px 32px;max-width:680px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#5bb3a8;margin-bottom:6px;">✓ 2 tag sets generated</div>
+        <div style="font-size:13px;color:#555;margin-bottom:28px;">This file has both small tags and bedding tags — each opened in a new tab and saved to your home page.</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px;">
+          <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px;">🏷️</div>
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">Small Tags</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${sc} tag${sc!==1?'s':''} · 2″ × 3.5″</div>
+            <button onclick="window.open('${smallUrl}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
+          </div>
+          <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px;">🛏</div>
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">Bedding Tags</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${bc} tag${bc!==1?'s':''} · 3.66″ × 8.5″</div>
+            <button onclick="window.open('${beddingUrl}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
+          </div>
+        </div>
+        <a href="index.html" style="font-size:12px;color:#888;text-decoration:none;border-bottom:1px solid #ddd;padding-bottom:2px;">← Back to home page</a>
+      </div>`;
+    lastDominantTemplate = 'small';
+    return;
+  }
+
+  // ── Single type: render in tags view
+  if (hasSmall) {
+    lastDominantTemplate = 'small';
+    tagCount = buildSmallTagNodes(smallItems, output);
+  }
+  if (hasBedding) {
+    lastDominantTemplate = 'bedding';
+    tagCount = buildBeddingTagNodes(beddingItems, output);
+  }
+
+  const otherItems = all.filter(r => !AS_SMALL_TYPES.has(r.type) && !AS_BEDDING_TYPES.has(r.type));
+  let countText = `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated`;
+  if (otherItems.length > 0) {
+    countText += ` · ⚠ ${otherItems.length} item${otherItems.length !== 1 ? 's' : ''} skipped (unrecognized type: ${[...new Set(otherItems.map(r => r.type))].join(', ')})`;
+  }
+  document.getElementById('tag-count').textContent = countText;
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('tags-view').style.display = 'block';
+
+  // Auto-add to site and open immediately
+  addToSite();
+}
+
+// ── localStorage card storage ──────────────────────────────────────────────
+const GENERATED_KEY = 'as-tags-generated-v1';
+
+function getGeneratedCards() {
+  try { return JSON.parse(localStorage.getItem(GENERATED_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function addGeneratedCard(card) {
+  const cards = getGeneratedCards();
+  const id = 'gen-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  cards.unshift({ id, ...card, createdAt: Date.now() });
+  try {
+    localStorage.setItem(GENERATED_KEY, JSON.stringify(cards));
+  } catch (e) {
+    // localStorage quota exceeded — remove oldest cards and retry
+    while (cards.length > 1) {
+      cards.pop();
+      try { localStorage.setItem(GENERATED_KEY, JSON.stringify(cards)); break; }
+      catch {}
+    }
+  }
+  return id;
+}
+
+function addToSite() {
+  const template = document.getElementById('template-select').value;
+  const effectiveTemplate = template === 'as-format' ? lastDominantTemplate : template;
+  const templateCss = getTemplateCss(effectiveTemplate);
+  const tagsHtml = document.getElementById('tags-output').innerHTML;
+  const tagCount = document.getElementById('tag-count').textContent;
+
+  const icon = effectiveTemplate === 'bedding' ? '🛏' : effectiveTemplate === 'rug' ? '🪢' : '🏷️';
+  const typeLabel = effectiveTemplate === 'bedding' ? 'Bedding Tags' :
+                    effectiveTemplate === 'rug'     ? 'Rug Tags'     : 'Small Tags';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Annie Selke Tags</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; margin: 0; }
+  .controls { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; }
+  .controls button { padding: 8px 16px; font-size: 13px; cursor: pointer; border: 1px solid #999; background: #fff; border-radius: 4px; font-family: Arial, sans-serif; }
+  .controls button:hover { background: #eee; }
+  .hint { font-size: 12px; color: #666; }
+  [contenteditable]:focus { outline: 1px solid #4a90d9; background: #f0f7ff; }
+  [contenteditable]:hover { background: #fafafa; cursor: text; }
+  ${templateCss}
+</style>
+</head>
+<body>
+<div class="controls">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <button id="cutLineBtn" onclick="toggleCutLines()">Cut Lines: ON</button>
+  <span class="hint">${tagCount} — Click any text to edit before printing.</span>
+  <span class="hint" style="margin-left:auto;color:#999;">In print dialog → More settings → uncheck "Headers and footers"</span>
+</div>
+<div class="tags-container" id="tags">${tagsHtml}</div>
+<script>
+function toggleCutLines() {
+  const on = document.body.classList.toggle('no-cut-lines');
+  document.getElementById('cutLineBtn').textContent = on ? 'Cut Lines: OFF' : 'Cut Lines: ON';
+}
+<\/script>
+</body>
+</html>`;
+
+  const date = new Date().toISOString().slice(0, 10);
+  addGeneratedCard({
+    title: `Annie Selke ${typeLabel}`,
+    description: tagCount,
+    meta: `Generated ${date} · Annie Selke`,
+    icon,
+    html,
+    uploadDate: date
+  });
+
+  // Open the card immediately in a new tab
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+
+  const sizeLabel = effectiveTemplate === 'bedding' ? '3.66″ × 8.5″' :
+                    effectiveTemplate === 'rug'     ? '3.66″ × 8.5″' : '2″ × 3.5″';
+  document.getElementById('save-instructions').innerHTML =
+    `<strong>✓ Saved to home page</strong> &nbsp;·&nbsp; ${typeLabel} &nbsp;·&nbsp; ${tagCount} &nbsp;·&nbsp; ${sizeLabel}
+     &nbsp;&nbsp;<a href="index.html" style="color:#9ed49e;margin-left:4px;">← Home page</a>`;
+  document.getElementById('save-instructions').style.display = 'block';
+}
+
+function showSetup() {
+  document.getElementById('setup').style.display = 'block';
+  document.getElementById('tags-view').style.display = 'none';
+  document.getElementById('save-instructions').style.display = 'none';
+  // Return to step 2 (same template) so they can drop a new file
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'block';
+}
+</script>
+</body>
+</html>
