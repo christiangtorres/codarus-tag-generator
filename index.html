@@ -109,6 +109,28 @@
   .card-wrapper:hover .card-delete { display: flex; }
   .card-delete:hover { background: #d94040; color: #fff; }
 
+  /* Archive button (left of delete) */
+  .card-archive {
+    position: absolute;
+    top: 8px; right: 38px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: #f0ede8;
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    z-index: 2;
+    font-family: inherit;
+  }
+  .card-wrapper:hover .card-archive { display: flex; }
+  .card-archive:hover { background: #5bb3a8; color: #fff; }
+
   /* Tool cards (non-deletable) */
   .tool-card { position: relative; }
   .tool-card .card { background: #fff; border: 1px solid #e0ddd8; }
@@ -124,6 +146,111 @@
     margin: 32px 0 12px;
   }
   .section-label:first-of-type { margin-top: 0; }
+
+  /* Section header row (label + action button) */
+  .section-label-row {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 32px 0 12px;
+  }
+  .section-label-row .section-label { margin: 0; }
+  .archive-all-btn {
+    background: none;
+    border: 1px solid #d0cdc8;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: #888;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .archive-all-btn:hover { border-color: #5bb3a8; color: #5bb3a8; }
+
+  /* Archive toggle + section */
+  .archive-toggle-row {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 40px;
+    border-top: 1px solid #e0ddd8;
+    padding-top: 20px;
+  }
+  .archive-toggle-btn {
+    background: none;
+    border: 1px solid #d0cdc8;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .archive-toggle-btn:hover { border-color: #5bb3a8; color: #5bb3a8; }
+  .archive-badge {
+    display: none;
+    background: #5bb3a8;
+    color: #fff;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    line-height: 1.4;
+  }
+  #archive-section {
+    display: none;
+    width: 100%;
+    max-width: 900px;
+    margin-top: 20px;
+  }
+  .archive-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #5bb3a8;
+    margin-bottom: 12px;
+  }
+  .archive-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .archive-card {
+    background: #f3faf8;
+    border: 1px solid #d6ece8;
+    padding: 20px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .archive-card-icon { font-size: 22px; opacity: 0.6; }
+  .archive-card-title { font-size: 13px; font-weight: 700; color: #5a7d78; text-transform: uppercase; letter-spacing: 0.04em; }
+  .archive-card-meta { font-size: 11px; color: #9bb8b3; margin-top: 2px; }
+  .unarchive-btn {
+    margin-top: 8px;
+    padding: 5px 12px;
+    border: 1px solid #d0cdc8;
+    background: #fff;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #666;
+    cursor: pointer;
+    font-family: inherit;
+    align-self: flex-start;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .unarchive-btn:hover { border-color: #5bb3a8; color: #2c8378; }
+  .archive-empty { font-size: 13px; color: #bbb; font-style: italic; }
 
   /* Trash toggle link */
   .trash-toggle-row {
@@ -233,7 +360,10 @@
 <p class="section-label" id="gen-label">Recently Generated</p>
 <div class="cards" id="tags-grid"></div>
 
-<p class="section-label" id="static-label">Tag Library</p>
+<div class="section-label-row" id="static-label">
+  <span class="section-label">Tag Library</span>
+  <button class="archive-all-btn" id="archive-all-btn">⤓ Archive all</button>
+</div>
 <div class="cards" id="static-grid"></div>
 
 <p class="section-label">Tools</p>
@@ -259,6 +389,19 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="archive-toggle-row">
+  <button class="archive-toggle-btn" id="archive-toggle-btn">
+    📦 Archive
+  </button>
+  <span class="archive-badge" id="archive-badge"></span>
+  <span style="font-size:11px;color:#ccc;">Archived cards are hidden but never deleted</span>
+</div>
+
+<div id="archive-section">
+  <div class="archive-section-label">Archive</div>
+  <div class="archive-cards" id="archive-grid"></div>
 </div>
 
 <div class="trash-toggle-row">
@@ -422,6 +565,48 @@ function restoreCard(id) {
   render();
 }
 
+// ── Archive helpers ────────────────────────────────────────────────────────
+// Archive = hidden from view but kept forever (no expiry, never purged).
+// Distinct from Trash, which auto-deletes after 30 days.
+const ARCHIVE_KEY = 'as-tags-archived-v1';
+
+function getArchive() {
+  try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function setArchive(a) {
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(a));
+}
+
+function isArchived(id) {
+  return !!getArchive()[id];
+}
+
+function archiveCard(id) {
+  const a = getArchive();
+  a[id] = Date.now();
+  setArchive(a);
+  render();
+}
+
+function unarchiveCard(id) {
+  const a = getArchive();
+  delete a[id];
+  setArchive(a);
+  render();
+}
+
+function archiveAllLibrary() {
+  const visible = REGISTRY.filter(c => !isInTrash(c.id) && !isArchived(c.id));
+  if (visible.length === 0) return;
+  if (!confirm(`Archive all ${visible.length} Tag Library card${visible.length !== 1 ? 's' : ''}? They'll be hidden but never deleted — restore anytime from the Archive.`)) return;
+  const a = getArchive();
+  visible.forEach(c => { a[c.id] = Date.now(); });
+  setArchive(a);
+  render();
+}
+
 function formatDate(str) {
   const d = new Date(str + 'T12:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -433,11 +618,16 @@ function render() {
   const now = Date.now();
   const isNew = c => c.createdAt && (now - c.createdAt) < 48 * 60 * 60 * 1000;
 
-  const activeGen    = genCards.filter(c => !isInTrash(c.id));
-  const activeStatic = REGISTRY.filter(c => !isInTrash(c.id));
+  const activeGen    = genCards.filter(c => !isInTrash(c.id) && !isArchived(c.id));
+  const activeStatic = REGISTRY.filter(c => !isInTrash(c.id) && !isArchived(c.id));
   const allTrashed   = [
     ...genCards.filter(c => isInTrash(c.id)).map(c => ({ ...c, isGenerated: true })),
     ...REGISTRY.filter(c => isInTrash(c.id)).map(c => ({ ...c, isGenerated: false }))
+  ];
+  // Archived (and not also in trash — trash takes precedence)
+  const allArchived  = [
+    ...genCards.filter(c => isArchived(c.id) && !isInTrash(c.id)).map(c => ({ ...c, isGenerated: true })),
+    ...REGISTRY.filter(c => isArchived(c.id) && !isInTrash(c.id)).map(c => ({ ...c, isGenerated: false }))
   ];
 
   function buildCard(c, generated, badge) {
@@ -458,6 +648,7 @@ function render() {
         <div class="card-meta">${c.meta}</div>
         <div class="card-date">Added ${formatDate(c.uploadDate)}</div>
       ${cardClose}
+      <button class="card-archive" onclick="event.preventDefault(); event.stopPropagation(); archiveCard('${c.id}')" title="Archive (hide without deleting)">⤓</button>
       <button class="card-delete" onclick="event.preventDefault(); event.stopPropagation(); ${deleteHandler}" title="Move to trash">&times;</button>
     </div>`;
   }
@@ -511,6 +702,33 @@ function render() {
       </div>`;
     }).join('');
   }
+
+  // Archive-all button — hide when nothing left to archive
+  const archiveAllBtn = document.getElementById('archive-all-btn');
+  archiveAllBtn.style.display = activeStatic.length > 0 ? '' : 'none';
+
+  // Archive badge
+  const aBadge = document.getElementById('archive-badge');
+  if (allArchived.length > 0) {
+    aBadge.textContent = allArchived.length;
+    aBadge.style.display = 'inline-block';
+  } else {
+    aBadge.style.display = 'none';
+  }
+
+  // Archive grid
+  const archiveGrid = document.getElementById('archive-grid');
+  if (allArchived.length === 0) {
+    archiveGrid.innerHTML = '<p class="archive-empty">Archive is empty.</p>';
+  } else {
+    archiveGrid.innerHTML = allArchived.map(c => `
+      <div class="archive-card">
+        <div class="archive-card-icon">${c.icon}</div>
+        <div class="archive-card-title">${c.title}</div>
+        <div class="archive-card-meta">${c.meta}</div>
+        <button class="unarchive-btn" onclick="unarchiveCard('${c.id}')">Unarchive</button>
+      </div>`).join('');
+  }
 }
 
 // ── Trash toggle ───────────────────────────────────────────────────────────
@@ -520,6 +738,17 @@ document.getElementById('trash-toggle-btn').addEventListener('click', () => {
   section.style.display = open ? 'none' : 'block';
   document.getElementById('trash-toggle-btn').textContent = open ? '🗑 Trash' : '🗑 Hide Trash';
 });
+
+// ── Archive toggle ─────────────────────────────────────────────────────────
+document.getElementById('archive-toggle-btn').addEventListener('click', () => {
+  const section = document.getElementById('archive-section');
+  const open = section.style.display === 'block';
+  section.style.display = open ? 'none' : 'block';
+  document.getElementById('archive-toggle-btn').textContent = open ? '📦 Archive' : '📦 Hide Archive';
+});
+
+// ── Archive all (Tag Library) ──────────────────────────────────────────────
+document.getElementById('archive-all-btn').addEventListener('click', archiveAllLibrary);
 
 render();
 </script>
