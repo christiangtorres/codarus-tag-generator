@@ -441,21 +441,6 @@ function openGenerated(id) {
   window.open(URL.createObjectURL(blob), '_blank');
 }
 
-function deleteGenerated(id) {
-  if (!confirm('Move this card to trash? It will be removed within 30 days.')) return;
-  const t = getTrash();
-  t[id] = Date.now();
-  setTrash(t);
-  render();
-}
-
-function restoreGenerated(id) {
-  const t = getTrash();
-  delete t[id];
-  setTrash(t);
-  render();
-}
-
 // ── Card Registry ──────────────────────────────────────────────────────────
 // To add a new card: append an entry to this array and redeploy.
 const REGISTRY = [
@@ -654,7 +639,7 @@ function render() {
       ? `<div class="card ${accentClass}" onclick="openGenerated('${c.id}')" style="cursor:pointer;">`
       : `<a class="card" href="${c.href}">`;
     const cardClose = generated ? `</div>` : `</a>`;
-    const deleteHandler = generated ? `deleteGenerated('${c.id}')` : `deleteCard('${c.id}')`;
+    const deleteHandler = `deleteCard('${c.id}')`;
     const newPill = badge ? `<span class="new-badge">NEW</span>` : '';
     return `
     <div class="card-wrapper">
@@ -710,7 +695,7 @@ function render() {
     trashGrid.innerHTML = '<p class="trash-empty">Trash is empty.</p>';
   } else {
     trashGrid.innerHTML = allTrashed.map(c => {
-      const restoreHandler = c.isGenerated ? `restoreGenerated('${c.id}')` : `restoreCard('${c.id}')`;
+      const restoreHandler = `restoreCard('${c.id}')`;
       return `
       <div class="trash-card">
         <div class="trash-card-icon">${c.icon}</div>

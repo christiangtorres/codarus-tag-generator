@@ -7,17 +7,33 @@ originSessionId: fdedd29e-c8f9-4088-824b-f8ee63aad24e
 # Annie Selke Price Tags
 
 **Location:** `/Users/christiantorres/Desktop/Data feed/Annie Selke Price Tags/`
+**Live:** https://codarus-price-tags.vercel.app · **Repo:** https://github.com/christiangtorres/codarus-tag-generator
+**Deploy:** `~/.npm-global/bin/vercel --prod --scope christiangtorres-projects --yes` then `vercel alias set <deployment-url> codarus-price-tags.vercel.app --scope christiangtorres-projects`
 
 **Why:** Generate print-ready price tags for Annie Selke products (bedding, rugs) from spreadsheet data, replicating the physical tag format with logo, collection name, and size/SKU/price variants.
+
+## Current Layout (updated 2026-06-02)
+
+Tags are printed on **pre-cut 3.25″ × 7.25″ stock — one tag per page** (the print `@page` size *is* the tag). This replaced the original 3-up landscape layout.
+- **Bedding & Rug:** 3.25″ × 7.25″, one per page, collection title +10% (bedding `.collection-name` 15.4px, rug `.collection` 16.5px).
+- **Bedding split rule:** any collection with a **Pillowcases** and/or **Sheet Set** section moves those to their **own second tag** (logo + collection name repeated) — hard rule, regardless of available space. Implemented in `appendBeddingTags()` / `isBeddingOverflowType()`; both render paths (manual template + AS-format) route through it.
+- **Spill safety net:** `break-inside: avoid` on `.type-section` and `.variant` so any too-tall tag breaks between whole units, never mid-price.
+- **Print settings:** set printer paper to 3.25 × 7.25 at 100%/Actual Size (not Fit-to-page); toggle Cut Lines OFF on pre-cut stock.
+- **AS-format parser:** `/api/parse` (Vercel serverless → Anthropic, model `claude-haiku-4-5-20251001`). Falls back to the local rule-based parser if the API errors.
+- **index.html:** landing page with Recently Generated + Tag Library sections, plus collapsible **Archive** (hide forever) and **Trash** (30-day purge) shelves.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `index.html` | Landing page — open this first |
-| `annie-selke-bedding-tags.html` | 202 bedding products, grouped by collection |
-| `annie-selke-rug-tags.html` | 958 rug products, 135 tags |
-| `tag-generator.html` | Reusable drag-and-drop tool for any future spreadsheet |
+| `tag-generator.html` | Reusable drag-and-drop tool for any future spreadsheet (the main app) |
+| `api/parse.js` | Vercel serverless proxy to Anthropic (AS-format parsing) |
+| `annie-selke-bedding-tags.html` | Original 202 bedding products (3.66×8.5 snapshot) |
+| `annie-selke-rug-tags.html` | Original 958 rug products / 135 tags (3.66×8.5 snapshot) |
+| `annie-selke-bedding-tags-2026-06-02.html` | Bedding at new 3.25×7.25 (28 tags, PC/SS split) — test render |
+| `annie-selke-rug-tags-2026-06-02.html` | Rugs at new 3.25×7.25 (135 tags) — test render |
+| `annie-selke-dec-pillows-throws.html` | Dec drop: 9 merged tags (CV/KIT combined, $0 suppressed) |
 | `annie-selke-logo.png` | Logo source file |
 | `data/bedding-source.csv` | Original bedding spreadsheet |
 | `data/rugs-source.xlsx` | Original rugs spreadsheet |
@@ -33,7 +49,7 @@ originSessionId: fdedd29e-c8f9-4088-824b-f8ee63aad24e
 ## Layout Rules
 - Variants sorted cheapest first within each section
 - 2-column layout when 2+ variants; single column for 1
-- Lone last item in a 2-col grid spans full width (CSS: `.two-col .variant:last-child:nth-child(odd) { grid-column: 1 / -1; }`)
+- Lone last item in a 2-col grid stays in column 1 (CSS: `.two-col .variant:last-child:nth-child(odd) { grid-column: 1; }`)
 - All text fields are `contenteditable` for inline editing before printing
 - Annie Selke logo embedded as base64 data URI (fully self-contained, no server needed)
 
