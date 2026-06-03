@@ -766,6 +766,30 @@ function renderBeddingTag(groupName, items, typeCol, twoCol, logoHtml) {
     ${sectionsHtml}`;
 }
 
+// Pillowcases and/or Sheet Set ALWAYS move to their own second tag (hard rule,
+// independent of available space). The second tag repeats the logo + collection
+// name, then lists those section(s). Returns the number of .tag nodes appended.
+function isBeddingOverflowType(type) {
+  const t = String(type || '').toLowerCase().replace(/[^a-z]/g, '');
+  return t.includes('pillowcase') || t.includes('sheetset');
+}
+
+function appendBeddingTags(groupName, items, typeCol, twoCol, logoHtml, container) {
+  const primary  = items.filter(i => !isBeddingOverflowType(i.type));
+  const overflow = items.filter(i =>  isBeddingOverflowType(i.type));
+  let tagItemGroups;
+  if (overflow.length === 0)      tagItemGroups = [items];              // no PC/SS → one tag
+  else if (primary.length === 0)  tagItemGroups = [overflow];           // only PC/SS → one tag
+  else                            tagItemGroups = [primary, overflow];  // split into two tags
+  tagItemGroups.forEach(group => {
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = renderBeddingTag(groupName, group, typeCol, twoCol, logoHtml);
+    container.appendChild(tag);
+  });
+  return tagItemGroups.length;
+}
+
 function renderRugTag(groupName, items, logoHtml) {
   const gridClass = items.length > 1 ? 'two-col' : '';
   const variantsHtml = items.map((item, i) => `
@@ -957,12 +981,14 @@ async function generateTags() {
     : `<div class="brand-name">ANNIE SELKE</div>`;
 
   for (const [groupName, items] of groups) {
+    if (template === 'bedding') {
+      tagCount += appendBeddingTags(groupName, items, typeCol, twoCol, logoHtml, output);
+      continue;
+    }
     const tag = document.createElement('div');
     tag.className = 'tag';
 
-    if (template === 'bedding') {
-      tag.innerHTML = renderBeddingTag(groupName, items, typeCol, twoCol, logoHtml);
-    } else if (template === 'rug') {
+    if (template === 'rug') {
       tag.innerHTML = renderRugTag(groupName, items, logoHtml);
     } else if (template === 'small') {
       tag.innerHTML = renderSmallTag(groupName, items, typeCol, logoHtml);
@@ -1110,11 +1136,7 @@ async function generateAsFormatTags() {
     cols.forEach((types, collectionName) => {
       const allItems = [];
       types.forEach((arr, typeName) => arr.forEach(i => allItems.push({ ...i })));
-      const tag = document.createElement('div');
-      tag.className = 'tag';
-      tag.innerHTML = renderBeddingTag(collectionName, allItems, true, true, logoHtml);
-      container.appendChild(tag);
-      count++;
+      count += appendBeddingTags(collectionName, allItems, true, true, logoHtml, container);
     });
     return count;
   }
@@ -1190,7 +1212,7 @@ ${css}</style></head><body>
           <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
             <div style="font-size:24px;margin-bottom:8px;">🛏</div>
             <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">Bedding Tags</div>
-            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${bc} tag${bc!==1?'s':''} · 3.66″ × 8.5″</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${bc} tag${bc!==1?'s':''} · 3.25″ × 7.25″</div>
             <button onclick="window.open('${beddingUrl}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
           </div>
         </div>
@@ -1309,7 +1331,7 @@ function toggleCutLines() {
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
 
-  const sizeLabel = effectiveTemplate === 'bedding' ? '3.66″ × 8.5″' :
+  const sizeLabel = effectiveTemplate === 'bedding' ? '3.25″ × 7.25″' :
                     effectiveTemplate === 'rug'     ? '3.66″ × 8.5″' : '2″ × 3.5″';
   document.getElementById('save-instructions').innerHTML =
     `<strong>✓ Saved to home page</strong> &nbsp;·&nbsp; ${typeLabel} &nbsp;·&nbsp; ${tagCount} &nbsp;·&nbsp; ${sizeLabel}
