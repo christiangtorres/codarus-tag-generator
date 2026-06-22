@@ -6,9 +6,20 @@ originSessionId: fdedd29e-c8f9-4088-824b-f8ee63aad24e
 ---
 # Annie Selke Price Tags
 
-**Location:** `/Users/christiantorres/Desktop/Data feed/Annie Selke Price Tags/`
+**Location:** `/Users/christiantorres/Desktop/Projects/Data feed/Annie Selke Price Tags/`
 **Live:** https://codarus-price-tags.vercel.app · **Repo:** https://github.com/christiangtorres/codarus-tag-generator
-**Deploy:** `~/.npm-global/bin/vercel --prod --scope christiangtorres-projects --yes` then `vercel alias set <deployment-url> codarus-price-tags.vercel.app --scope christiangtorres-projects`
+**Before deploy:** `node verify.js --api` (must pass) — see Guardrails below.
+**Deploy:** `~/.npm-global/bin/vercel --prod --scope christiangtorres-projects --yes` then `vercel alias set <deployment-url> codarus-price-tags.vercel.app --scope christiangtorres-projects`. **Then `git push`** — Vercel deploys from the local CLI, so a deploy does NOT push to GitHub; push separately or the repo drifts from what's live.
+
+## Guardrails (read before changing parsing)
+The AS-format (Claude) path keeps the product-type list in **two places that must stay in sync**:
+- `api/parse.js` → `knownTypes` — what Claude is told to produce.
+- `tag-generator.html` → `AS_SMALL_TYPES` / `AS_BEDDING_TYPES` / `AS_RUG_TYPES` — what actually renders.
+If Claude returns a type with no front-end bucket, those rows are **silently skipped** (this caused the rug-skip and is the #1 recurring bug). When adding a product type, add it to BOTH. `node verify.js` checks they agree and that both files parse; `--api` also smoke-tests the live endpoint.
+
+Other invariants that have broken before:
+- **Model name** (`api/parse.js`): `claude-haiku-4-5-20251001`. Old `claude-3-5-haiku-*` was retired and 404s. If the API starts 502-ing, check the model is still current.
+- **Large files must batch.** The front-end sends rows to `/api/parse` in 40-row batches (`AS_BATCH_SIZE`), 4 concurrent. One giant request exceeds `vercel.json` `maxDuration` (30s) and the model's `max_tokens` → fails. Don't "simplify" back to a single call.
 
 **Why:** Generate print-ready price tags for Annie Selke products (bedding, rugs) from spreadsheet data, replicating the physical tag format with logo, collection name, and size/SKU/price variants.
 
