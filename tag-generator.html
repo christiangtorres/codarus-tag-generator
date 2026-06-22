@@ -1004,6 +1004,62 @@ async function generateTags() {
   document.getElementById('tags-view').style.display = 'block';
 }
 
+// ── Parse rows through /api/parse in concurrency-limited batches ──
+// A single request can't handle hundreds of rows: the model's output blows past
+// max_tokens (truncated → unparseable) and the serverless call exceeds its timeout.
+// One request per ~40 rows keeps each call fast and small. Results are aligned 1:1
+// with the input; any batch that errors is parsed locally so no rows are lost.
+const AS_BATCH_SIZE  = 40;
+const AS_CONCURRENCY = 4;
+
+async function asParseRowsBatched(rows, instructions, validRows, nameCol, skuCol, priceCol, onProgress) {
+  const batches = [];
+  for (let i = 0; i < rows.length; i += AS_BATCH_SIZE) {
+    batches.push({ start: i, rows: rows.slice(i, i + AS_BATCH_SIZE) });
+  }
+  const parsed = new Array(rows.length);
+  let done = 0, failedCount = 0;
+
+  async function runBatch(batch) {
+    const body = { rows: batch.rows };
+    if (instructions) body.instructions = instructions;
+    try {
+      const resp = await fetch('/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        throw new Error(e.error || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      if (!Array.isArray(data.parsed) || data.parsed.length !== batch.rows.length)
+        throw new Error('row count mismatch');
+      data.parsed.forEach((p, j) => { parsed[batch.start + j] = p; });
+    } catch (err) {
+      console.warn(`Batch @${batch.start} failed (${err.message}) — using local parser`);
+      failedCount += batch.rows.length;
+      batch.rows.forEach((_, j) => {
+        const vr = validRows[batch.start + j];
+        parsed[batch.start + j] = asParseRow(vr[nameCol], vr[skuCol], vr[priceCol]);
+      });
+    } finally {
+      done += batch.rows.length;
+      if (onProgress) onProgress(done, rows.length);
+    }
+  }
+
+  let next = 0;
+  async function worker() {
+    while (next < batches.length) await runBatch(batches[next++]);
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(AS_CONCURRENCY, batches.length) }, worker)
+  );
+  return { parsed, failedCount };
+}
+
 async function generateAsFormatTags() {
   const nameCol  = document.getElementById('as-col-name').value;
   const skuCol   = document.getElementById('as-col-sku').value;
@@ -1017,41 +1073,20 @@ async function generateAsFormatTags() {
   loadingMsg.textContent = `Analyzing ${validRows.length} products with Claude…`;
   loadingState.style.display = 'block';
 
-  let all;
-  let usedFallback = false;
+  const rows = validRows.map(r => ({
+    name:  String(r[nameCol] || ''),
+    sku:   String(r[skuCol]  || ''),
+    price: parseFloat(String(r[priceCol] || '0').replace(/[$,]/g, '')) || 0
+  }));
+  const instructions = (document.getElementById('as-instructions').value || '').trim();
 
-  try {
-    const rows = validRows.map(r => ({
-      name:  String(r[nameCol] || ''),
-      sku:   String(r[skuCol]  || ''),
-      price: parseFloat(String(r[priceCol] || '0').replace(/[$,]/g, '')) || 0
-    }));
-    const instructions = (document.getElementById('as-instructions').value || '').trim();
-    const body = { rows };
-    if (instructions) body.instructions = instructions;
-
-    const resp = await fetch('/api/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${resp.status}`);
-    }
-    const { parsed } = await resp.json();
-    all = parsed.filter(r => r.collection && !r.suppress);
-
-  } catch (err) {
-    // Fallback to local rule-based parser
-    usedFallback = true;
-    console.warn('Claude API unavailable — using local parser:', err.message);
-    loadingMsg.textContent = 'Claude API unavailable — using local parser…';
-    await new Promise(r => setTimeout(r, 900));
-    all = sheetData
-      .map(r => asParseRow(r[nameCol], r[skuCol], r[priceCol]))
-      .filter(r => r.collection);
-  }
+  // Parse in batches — see asParseRowsBatched. Failed batches fall back locally.
+  const { parsed, failedCount } = await asParseRowsBatched(
+    rows, instructions, validRows, nameCol, skuCol, priceCol,
+    (d, t) => { loadingMsg.textContent = `Analyzing ${t} products with Claude… ${d}/${t}`; }
+  );
+  const usedFallback = failedCount > 0;
+  const all = parsed.filter(r => r && r.collection && !r.suppress);
 
   loadingState.style.display = 'none';
 
@@ -1234,7 +1269,7 @@ ${css}</style></head><body>
 
   const otherItems = all.filter(r => !AS_SMALL_TYPES.has(r.type) && !AS_BEDDING_TYPES.has(r.type));
   let countText = `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated`;
-  if (usedFallback) countText += ' · ⚠ local parser (Claude API unavailable)';
+  if (usedFallback) countText += ` · ⚠ ${failedCount}/${rows.length} via local parser (Claude unavailable)`;
   if (otherItems.length > 0) {
     countText += ` · ⚠ ${otherItems.length} item${otherItems.length !== 1 ? 's' : ''} skipped (unrecognized type: ${[...new Set(otherItems.map(r => r.type))].join(', ')})`;
   }
