@@ -603,6 +603,7 @@ const AS_SMALL_TYPES  = new Set(["Blanket","Throw","Decorative Pillow","Rug Otto
 const AS_BEDDING_TYPES = new Set(["Quilted Coverlet Sham","Matelasse Coverlet","Matelasse Sham",
   "Quilted Coverlet","Quilted Sham","Duvet Cover","Duvet Sham",
   "Coverlet Sham","Sheet Set","Pillowcases","Coverlet","Quilt","Sham"]);
+const AS_RUG_TYPES = new Set(["Rug","Indoor/Outdoor Rug"]);
 
 function asStripEnd(str, list) {
   for (const s of list) {
@@ -1090,29 +1091,17 @@ async function generateAsFormatTags() {
 
   loadingState.style.display = 'none';
 
-  // Separate into small-tag and bedding groups
+  // Separate into small-tag, bedding, and rug groups
   const smallItems    = all.filter(r => AS_SMALL_TYPES.has(r.type));
   const beddingItems  = all.filter(r => AS_BEDDING_TYPES.has(r.type));
-  const hasSmall      = smallItems.length > 0;
-  const hasBedding    = beddingItems.length > 0;
+  const rugItems      = all.filter(r => AS_RUG_TYPES.has(r.type));
 
   const output = document.getElementById('tags-output');
   output.innerHTML = '';
-  let tagCount = 0;
 
   const logoHtml = LOGO_SRC
     ? `<div class="brand-logo"><img src="${LOGO_SRC}" alt="Annie Selke"></div>`
     : `<div class="brand-name">ANNIE SELKE</div>`;
-
-  // Inject small-tag CSS if small items exist; otherwise bedding CSS
-  const dominantTemplate = hasSmall ? 'small' : 'bedding';
-  lastDominantTemplate = dominantTemplate;
-  let existingStyle = document.getElementById('template-override-css');
-  if (existingStyle) existingStyle.remove();
-  const style = document.createElement('style');
-  style.id = 'template-override-css';
-  style.textContent = getTemplateCss(dominantTemplate);
-  document.head.appendChild(style);
 
   // ── Helper: build tag DOM nodes into a container for a given item set + template
   function buildSmallTagNodes(items, container) {
@@ -1176,17 +1165,29 @@ async function generateAsFormatTags() {
     return count;
   }
 
-  // ── Mixed sheet: auto-save two cards to site
-  if (hasSmall && hasBedding) {
-    const date = new Date().toISOString().slice(0, 10);
-    const smallContainer   = document.createElement('div');
-    const beddingContainer = document.createElement('div');
-    const sc = buildSmallTagNodes(smallItems, smallContainer);
-    const bc = buildBeddingTagNodes(beddingItems, beddingContainer);
+  // One rug tag per collection, all sizes listed (sorted by price). Rug template
+  // is 3.25″ × 7.25″, one tag per page; CSS handles any size overflow to page 2.
+  function buildRugTagNodes(items, container) {
+    const cols = new Map();
+    items.forEach(({ collection, type, sku, variant, price }) => {
+      if (!cols.has(collection)) cols.set(collection, []);
+      cols.get(collection).push({ sku, variant, price, type });
+    });
+    let count = 0;
+    cols.forEach((arr, collectionName) => {
+      arr.sort((a, b) => a.price - b.price);   // renderRugTag formats price itself — pass raw numbers
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.innerHTML = renderRugTag(collectionName, arr, logoHtml);
+      container.appendChild(tag);
+      count++;
+    });
+    return count;
+  }
 
-    function makeStandaloneHtml(container, template) {
-      const css = getTemplateCss(template);
-      return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Annie Selke Tags</title>
+  function makeStandaloneHtml(container, template) {
+    const css = getTemplateCss(template);
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Annie Selke Tags</title>
 <style>* { box-sizing: border-box; } body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; margin: 0; }
 .controls { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; }
 .controls button { padding: 8px 16px; font-size: 13px; cursor: pointer; border: 1px solid #999; background: #fff; border-radius: 4px; font-family: Arial, sans-serif; }
@@ -1199,81 +1200,89 @@ ${css}</style></head><body>
 <div class="tags-container" id="tags">${container.innerHTML}</div>
 <script>function toggleCutLines(){const on=document.body.classList.toggle('no-cut-lines');document.getElementById('cutLineBtn').textContent=on?'Cut Lines: OFF':'Cut Lines: ON';}<\/script>
 </body></html>`;
-    }
+  }
 
-    const smallHtml   = makeStandaloneHtml(smallContainer, 'small');
-    const beddingHtml = makeStandaloneHtml(beddingContainer, 'bedding');
+  // Active product categories, in display order. Each renders to its own template.
+  const buckets = [
+    { template: 'small',   label: 'Small Tags',   icon: '🏷️', size: '2″ × 3.5″',
+      desc: 'Blankets, throws, decorative pillows & rug ottomans — 2″ × 3.5″ hang tags.',
+      items: smallItems,   build: buildSmallTagNodes },
+    { template: 'bedding', label: 'Bedding Tags', icon: '🛏', size: '3.25″ × 7.25″',
+      desc: 'Duvet covers, shams, sheet sets, pillowcases, quilts, coverlets — grouped by collection.',
+      items: beddingItems, build: buildBeddingTagNodes },
+    { template: 'rug',     label: 'Rug Tags',     icon: '🪢', size: '3.25″ × 7.25″',
+      desc: 'Rugs & indoor/outdoor rugs — one tag per collection, all sizes listed.',
+      items: rugItems,     build: buildRugTagNodes },
+  ].filter(b => b.items.length > 0);
 
-    addGeneratedCard({
-      title: 'Annie Selke Small Tags',
-      description: 'Blankets, throws, decorative pillows & rug ottomans — 2″ × 3.5″ hang tags.',
-      meta: `${sc} tag${sc!==1?'s':''} · Annie Selke`,
-      icon: '🏷️',
-      html: smallHtml,
-      uploadDate: date
+  // Warnings appended to whatever count text we show
+  const otherItems = all.filter(r =>
+    !AS_SMALL_TYPES.has(r.type) && !AS_BEDDING_TYPES.has(r.type) && !AS_RUG_TYPES.has(r.type));
+  const fallbackNote = usedFallback
+    ? ` · ⚠ ${failedCount}/${rows.length} via local parser (Claude unavailable)` : '';
+  const skipNote = otherItems.length > 0
+    ? ` · ⚠ ${otherItems.length} item${otherItems.length !== 1 ? 's' : ''} skipped (unrecognized type: ${[...new Set(otherItems.map(r => r.type))].join(', ')})`
+    : '';
+
+  // ── Multiple categories: one standalone file per category ──
+  if (buckets.length >= 2) {
+    const date = new Date().toISOString().slice(0, 10);
+    const built = buckets.map(b => {
+      const container = document.createElement('div');
+      const count = b.build(b.items, container);
+      const html  = makeStandaloneHtml(container, b.template);
+      addGeneratedCard({
+        title: `Annie Selke ${b.label}`,
+        description: b.desc,
+        meta: `${count} tag${count !== 1 ? 's' : ''} · Annie Selke`,
+        icon: b.icon,
+        html,
+        uploadDate: date
+      });
+      const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      window.open(url, '_blank');
+      return { ...b, count, url };
     });
-    addGeneratedCard({
-      title: 'Annie Selke Bedding Tags',
-      description: 'Duvet covers, shams, sheet sets, pillowcases, quilts, coverlets — grouped by collection.',
-      meta: `${bc} tag${bc!==1?'s':''} · Annie Selke`,
-      icon: '🛏',
-      html: beddingHtml,
-      uploadDate: date
-    });
 
-    // Open both blobs immediately
-    const smallBlob   = new Blob([smallHtml],   { type: 'text/html' });
-    const beddingBlob = new Blob([beddingHtml], { type: 'text/html' });
-    const smallUrl   = URL.createObjectURL(smallBlob);
-    const beddingUrl = URL.createObjectURL(beddingBlob);
-    window.open(smallUrl,   '_blank');
-    window.open(beddingUrl, '_blank');
-
+    const totalCount = built.reduce((s, b) => s + b.count, 0);
     document.getElementById('setup').style.display = 'none';
     document.getElementById('save-instructions').style.display = 'none';
     document.getElementById('tags-view').style.display = 'block';
-    document.getElementById('tag-count').textContent = `${sc + bc} tags · 2 files generated`;
+    document.getElementById('tag-count').textContent =
+      `${totalCount} tags · ${built.length} files generated${fallbackNote}${skipNote}`;
+    const cardsHtml = built.map(b => `
+          <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
+            <div style="font-size:24px;margin-bottom:8px;">${b.icon}</div>
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">${b.label}</div>
+            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${b.count} tag${b.count !== 1 ? 's' : ''} · ${b.size}</div>
+            <button onclick="window.open('${b.url}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
+          </div>`).join('');
     document.getElementById('tags-output').innerHTML = `
-      <div style="padding:40px 32px;max-width:680px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#5bb3a8;margin-bottom:6px;">✓ 2 tag sets generated</div>
-        <div style="font-size:13px;color:#555;margin-bottom:28px;">This file has both small tags and bedding tags — each opened in a new tab and saved to your home page.</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px;">
-          <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
-            <div style="font-size:24px;margin-bottom:8px;">🏷️</div>
-            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">Small Tags</div>
-            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${sc} tag${sc!==1?'s':''} · 2″ × 3.5″</div>
-            <button onclick="window.open('${smallUrl}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
-          </div>
-          <div style="background:#fff;border:1px solid #e0ddd8;border-left:3px solid #5bb3a8;padding:20px 20px 16px;flex:1;min-width:180px;">
-            <div style="font-size:24px;margin-bottom:8px;">🛏</div>
-            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#1a1a1a;margin-bottom:4px;">Bedding Tags</div>
-            <div style="font-size:11px;color:#aaa;margin-bottom:14px;">${bc} tag${bc!==1?'s':''} · 3.25″ × 7.25″</div>
-            <button onclick="window.open('${beddingUrl}','_blank')" style="background:#2c2c2c;color:#fff;border:none;padding:6px 16px;font-size:12px;cursor:pointer;border-radius:3px;font-family:inherit;">Open ↗</button>
-          </div>
-        </div>
+      <div style="padding:40px 32px;max-width:760px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#5bb3a8;margin-bottom:6px;">✓ ${built.length} tag sets generated</div>
+        <div style="font-size:13px;color:#555;margin-bottom:28px;">This file contains multiple product categories — each opened in a new tab and saved to your home page.</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:32px;">${cardsHtml}</div>
         <a href="index.html" style="font-size:12px;color:#888;text-decoration:none;border-bottom:1px solid #ddd;padding-bottom:2px;">← Back to home page</a>
       </div>`;
-    lastDominantTemplate = 'small';
+    lastDominantTemplate = built[0].template;
     return;
   }
 
-  // ── Single type: render in tags view
-  if (hasSmall) {
-    lastDominantTemplate = 'small';
-    tagCount = buildSmallTagNodes(smallItems, output);
-  }
-  if (hasBedding) {
-    lastDominantTemplate = 'bedding';
-    tagCount = buildBeddingTagNodes(beddingItems, output);
-  }
+  // ── Single category (or none): render inline in the tags view ──
+  const only = buckets[0];
+  const template = only ? only.template : 'small';
+  lastDominantTemplate = template;
+  let existingStyle = document.getElementById('template-override-css');
+  if (existingStyle) existingStyle.remove();
+  const style = document.createElement('style');
+  style.id = 'template-override-css';
+  style.textContent = getTemplateCss(template);
+  document.head.appendChild(style);
 
-  const otherItems = all.filter(r => !AS_SMALL_TYPES.has(r.type) && !AS_BEDDING_TYPES.has(r.type));
-  let countText = `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated`;
-  if (usedFallback) countText += ` · ⚠ ${failedCount}/${rows.length} via local parser (Claude unavailable)`;
-  if (otherItems.length > 0) {
-    countText += ` · ⚠ ${otherItems.length} item${otherItems.length !== 1 ? 's' : ''} skipped (unrecognized type: ${[...new Set(otherItems.map(r => r.type))].join(', ')})`;
-  }
-  document.getElementById('tag-count').textContent = countText;
+  const tagCount = only ? only.build(only.items, output) : 0;
+
+  document.getElementById('tag-count').textContent =
+    `${tagCount} tag${tagCount !== 1 ? 's' : ''} generated${fallbackNote}${skipNote}`;
   document.getElementById('setup').style.display = 'none';
   document.getElementById('tags-view').style.display = 'block';
 

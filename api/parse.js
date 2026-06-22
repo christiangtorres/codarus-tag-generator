@@ -10,6 +10,7 @@ module.exports = async function handler(req, res) {
     "Quilted Coverlet", "Quilted Sham", "Duvet Cover", "Duvet Sham",
     "Coverlet Sham", "Sheet Set", "Pillowcases", "Coverlet",
     "Decorative Pillow", "Indoor/Outdoor Pillow",
+    "Indoor/Outdoor Rug", "Rug",
     "Blanket", "Throw", "Quilt", "Sham", "Rug Ottoman"
   ];
 
@@ -23,7 +24,8 @@ Known product types (use these when they match): ${knownTypes.join(', ')}
 Rules:
 - collection: the product family/design name (e.g. "Amity Navy", "Oliver Ombre Denim")
 - type: match to a known type above; use your best judgment for anything unfamiliar
-- variant: size or configuration (e.g. "King", "Twin/Twin XL", '16" × 24"', '22" Sq'). Empty string if none.
+- variant: size or configuration (e.g. "King", "Twin/Twin XL", '16" × 24"', '22" Sq', "5' × 8'", '9\'6" × 12\''). Empty string if none.
+- A product is a RUG (type "Rug", or "Indoor/Outdoor Rug" when the name says indoor/outdoor) when its name contains "Rug" and its sizes are floor dimensions in feet like 2'×3', 3'×5', 5'×8', 8'×10', 9'6"×12'. NEVER classify a rug as a pillow — pillows have small inch/square sizes like '18" Sq', '22" Sq', '16" × 24"'. "Rug Ottoman" is its own type, distinct from "Rug".
 - sku: return exactly as provided in input
 - price: return exactly as provided in input (number)
 - suppress: true only if price is 0 or the item is clearly a placeholder that shouldn't print
